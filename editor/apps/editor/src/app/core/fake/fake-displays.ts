@@ -1,6 +1,6 @@
 import type { Insert } from '@anode/api-client';
 import { analyserBands, eqResponse } from '@anode/audio-ui/lazy';
-import { EqOutput, eqBandsOf } from '../../plugin-panels/eq-bands';
+import { EqDynamicBands, EqOutput, EqSpectrumBands, eqBandsOf } from '../../plugin-panels/eq-bands';
 
 /** What an insert reports: its reading, and its display (`null` when it has none). */
 export interface FakeDisplay {
@@ -15,9 +15,6 @@ export const DisplayLeaseMs = 3_000;
 export function displayKey(trackId: string | null, insertId: string): string {
   return `${trackId ?? 'master'}/${insertId}`;
 }
-
-/** The bands an EQ's display sends (`SpectrumAnalyzer.DisplayBands`). */
-const SpectrumBands = 64;
 
 /** What an insert's parameter is, or its default in the catalogue when the insert has not set it. */
 function eqValue(insert: Insert, id: string, defaults: ReadonlyMap<string, number>): number {
@@ -36,17 +33,31 @@ export function fakeSpectrum(
   tick: number,
   defaults: ReadonlyMap<string, number>
 ): number[] {
-  const bands = analyserBands(SpectrumBands);
+  const bands = analyserBands(EqSpectrumBands);
+  const value = (id: string) => eqValue(insert, id, defaults);
+  const db = level > 0 ? 20 * Math.log10(level) : silence;
+  // The Channel EQ's display starts with what its dynamic bands add, heard here at the program's level.
+  const dynamics =
+    insert.pluginId === 'anode.channel-eq'
+      ? EqDynamicBands.map(band => {
+          if (!band.dynamic || value(band.dynamic) < 0.5) {
+            return 0;
+          }
+          const over = Math.max(0, db - value(band.threshold ?? '')) * (1 - 1 / value(band.ratio ?? ''));
+          const range = value(band.range ?? '');
+          return Math.sign(range) * Math.min(Math.abs(range), over);
+        })
+      : [];
   if (level <= 0) {
-    return bands.map(() => silence);
+    return [...dynamics, ...bands.map(() => silence)];
   }
-  const db = 20 * Math.log10(level);
-  const eq = eqBandsOf(insert.pluginId, id => eqValue(insert, id, defaults));
+  const eq = eqBandsOf(insert.pluginId, value, dynamics);
   const curve = eqResponse(eq, bands, 48_000, eqValue(insert, EqOutput, defaults));
-  return bands.map((hz, i) => {
+  const spectrum = bands.map((hz, i) => {
     const stir = 2 * Math.sin(i * 0.9 + tick / 480);
     return Math.max(silence, db - 12 - 3 * Math.log2(hz / 100) + stir + (curve[i] ?? 0));
   });
+  return [...dynamics, ...spectrum];
 }
 
 /** A sine of `points` samples, `periods` long, at `peak`. */

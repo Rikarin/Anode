@@ -49,7 +49,12 @@ export function eqBandText(band: EqBand): string {
     return `${hz}, ${(band.slope + 1) * 12} dB per octave${band.on ? '' : ', off'}`;
   }
   const db = `${band.gainDb < 0 ? '−' : '+'}${Math.abs(band.gainDb).toFixed(1)} dB`;
-  return `${hz}, ${db}, Q ${band.q.toFixed(2)}${band.on ? '' : ', off'}`;
+  const place = band.place && band.place !== 'stereo' ? `, ${band.place}` : '';
+  const moving = band.dynamicDb ?? 0;
+  const dynamic = band.dynamic
+    ? `, dynamic ${moving < 0 ? '−' : moving > 0 ? '+' : ''}${Math.abs(moving).toFixed(1)} dB`
+    : '';
+  return `${hz}, ${db}, Q ${band.q.toFixed(2)}${place}${dynamic}${band.on ? '' : ', off'}`;
 }
 
 /** Where a band's handle sits: a cut on the 0 dB line, the others at their gain. */
@@ -69,7 +74,8 @@ export interface EqBandChange {
  * `fill-primary/30` area on its own −90…0 dBFS scale, in a `well` with frequency and gain grid lines. Each band is a
  * numbered handle: drag it (frequency across, gain up and down; a cut moves across only), turn the wheel over it for Q (a
  * cut's slope), or focus it: ←/→ frequency, ↑/↓ gain (a cut's slope), Page Up/Down Q, ⇧ finer. `bandChange` asks for
- * the values; the owner holds them. Each handle is an ARIA slider whose text says frequency, gain and Q; the graph
+ * the values; the owner holds them. A dynamic band's handle has a ring, and the curve follows what it adds; bands placed
+ * on the mid or side split the curve, the side's dashed. Each handle is an ARIA slider whose text says frequency, gain and Q; the graph
  * itself is an image with `label`.
  */
 @Component({
@@ -122,6 +128,17 @@ export interface EqBandChange {
           vector-effect="non-scaling-stroke"
           [attr.points]="curve()"
         />
+        @if (sideCurve(); as side) {
+          <polyline
+            class="stroke-meter-mid fill-none"
+            data-testid="eq-curve-side"
+            stroke-width="1.25"
+            stroke-dasharray="4 3"
+            stroke-linejoin="round"
+            vector-effect="non-scaling-stroke"
+            [attr.points]="side"
+          />
+        }
       </svg>
       @for (band of bands(); track band.id; let i = $index) {
         <span
@@ -133,6 +150,8 @@ export interface EqBandChange {
           [class.text-primary-foreground]="band.on"
           [class.bg-surface-raised]="!band.on"
           [class.text-foreground]="!band.on"
+          [class.ring-2]="band.dynamic"
+          [class.ring-meter-mid]="band.dynamic"
           [attr.data-band]="band.id"
           [attr.aria-label]="band.label"
           [attr.aria-valuemin]="20"
@@ -147,6 +166,7 @@ export interface EqBandChange {
           (pointercancel)="release($event)"
           (wheel)="wheel($event, band)"
           (keydown)="key($event, band)"
+          (focus)="bandSelect.emit(band)"
           >{{ i + 1 }}</span
         >
       }
@@ -169,6 +189,8 @@ export class AnEqGraph {
   readonly height = input(180, { transform: numberAttribute });
 
   readonly bandChange = output<EqBandChange>();
+  /** A handle took the focus (a press does that): its band is the one the owner's controls show. */
+  readonly bandSelect = output<EqBand>();
 
   protected readonly frequencyTicks = FrequencyTicks;
   protected readonly gainTicks = GainTicks;
@@ -179,14 +201,14 @@ export class AnEqGraph {
   private readonly grabbed = signal<number | null>(null);
   private readonly frequencies = logFrequencies(CurvePoints);
 
-  protected readonly curve = computed(() => {
-    const response = eqResponse(this.bands(), this.frequencies, this.sampleRate(), this.outputDb());
-    return polyline(
-      this.frequencies.map((hz, i) => ({
-        x: Math.round(this.x(hz) * 10) / 10,
-        y: Math.round(this.y(response[i] ?? 0) * 10) / 10
-      }))
-    );
+  /** The curve of what a mid signal goes through (left and right alike, when no band is placed). */
+  protected readonly curve = computed(() => this.line(this.bands().filter(band => band.place !== 'side')));
+  /** The side's own curve, dashed, once a band is placed so that the two differ. */
+  protected readonly sideCurve = computed(() => {
+    const bands = this.bands();
+    return bands.some(band => band.on && band.place && band.place !== 'stereo')
+      ? this.line(bands.filter(band => band.place !== 'mid'))
+      : null;
   });
 
   protected readonly analyser = computed(() => {
@@ -197,6 +219,16 @@ export class AnEqGraph {
     }));
     return areaPath(points, 240);
   });
+
+  private line(bands: readonly EqBand[]): string {
+    const response = eqResponse(bands, this.frequencies, this.sampleRate(), this.outputDb());
+    return polyline(
+      this.frequencies.map((hz, i) => ({
+        x: Math.round(this.x(hz) * 10) / 10,
+        y: Math.round(this.y(response[i] ?? 0) * 10) / 10
+      }))
+    );
+  }
 
   protected x(hz: number): number {
     return spectrumX(hz) * 600;

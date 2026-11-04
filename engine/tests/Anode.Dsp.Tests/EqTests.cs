@@ -96,8 +96,11 @@ public sealed class EqTests {
         var tone = TestWav.Sine(1_000, (int)Fx.Rate, 0.5);
         Fx.Run(eq, tone);
         var display = Assert.IsAssignableFrom<IEffectDisplay>(eq);
-        var bands = new float[display.DisplaySize];
-        Assert.Equal(SpectrumAnalyzer.DisplayBands, display.ReadDisplay(bands));
+        var all = new float[display.DisplaySize];
+        Assert.Equal(all.Length, display.ReadDisplay(all));
+        Assert.All(all.AsSpan(0, ChannelEq.DynamicBands).ToArray(), static gain => Assert.Equal(0, gain));
+        var bands = all[ChannelEq.DynamicBands..];
+        Assert.Equal(SpectrumAnalyzer.DisplayBands, bands.Length);
         // Bands run 20 Hz to 20 kHz evenly in log frequency, so 1 kHz is 56.6 % of the way up.
         var peak = Array.IndexOf(bands, bands.Max());
         Assert.Equal((int)(Math.Log(1_000.0 / 20) / Math.Log(1_000) * bands.Length), peak);
@@ -110,6 +113,270 @@ public sealed class EqTests {
         var flat = new float[SpectrumAnalyzer.DisplayBands];
         Assert.Equal(flat.Length, ((IEffectDisplay)linear).ReadDisplay(flat));
         Assert.Equal(peak, Array.IndexOf(flat, flat.Max()));
+    }
+
+    // ---- Mid/side -------------------------------------------------------------------------------------------------------
+
+    static (float[] Left, float[] Right) Stereo(float[] mid, float[] side) {
+        var left = new float[mid.Length];
+        var right = new float[mid.Length];
+        for (var i = 0; i < left.Length; i++) {
+            left[i] = mid[i] + side[i];
+            right[i] = mid[i] - side[i];
+        }
+
+        return (left, right);
+    }
+
+    static float[] Mix(float[] a, float[] b, float sign) {
+        var mix = new float[a.Length];
+        for (var i = 0; i < mix.Length; i++) {
+            mix[i] = 0.5f * (a[i] + sign * b[i]);
+        }
+
+        return mix;
+    }
+
+    public static TheoryData<int, double, double> Places =>
+        new() { { ChannelEq.Stereo, 12, 12 }, { ChannelEq.Mid, 12, 0 }, { ChannelEq.Side, 0, 12 } };
+
+    [Theory]
+    [MemberData(nameof(Places))]
+    public void A_band_works_on_its_placement_alone(int place, double midDb, double sideDb) {
+        using var eq = Fx.Create(
+            ChannelEq.Id,
+            (ChannelEq.Peak2Frequency, 1_000),
+            (ChannelEq.Peak2Gain, 12),
+            (ChannelEq.Peak2Place, place)
+        );
+        var impulse = Fx.Impulse(16_384, 0, 0.25f);
+        var silence = new float[16_384];
+        var (left, right) = Fx.Run(eq, Stereo(impulse, silence).Left, Stereo(impulse, silence).Right);
+        Assert.Equal(midDb, ToDb(MagnitudeAt(Mix(left, right, 1), 1_000, Fx.Rate) / 0.25), 0.02);
+        eq.Reset();
+        (left, right) = Fx.Run(eq, Stereo(silence, impulse).Left, Stereo(silence, impulse).Right);
+        Assert.Equal(sideDb, ToDb(MagnitudeAt(Mix(left, right, -1), 1_000, Fx.Rate) / 0.25), 0.02);
+    }
+
+    [Fact]
+    public void Mid_and_side_at_rest_are_the_input() {
+        // A placed band at 0 dB is skipped; one that really runs at a tiny gain still rebuilds left and right.
+        using var eq = Fx.Create(ChannelEq.Id, (ChannelEq.Peak1Place, ChannelEq.Side), (ChannelEq.Peak1Gain, 0.0001f));
+        var (music, right) = Fx.Music(24_000);
+        var (l, r) = Fx.Run(eq, music, right);
+        Assert.True(NullResidualDb(music, l) < -90, $"{NullResidualDb(music, l):0.0} dB");
+        Assert.True(NullResidualDb(right, r) < -90, $"{NullResidualDb(right, r):0.0} dB");
+    }
+
+    [Fact]
+    public void A_band_on_the_side_leaves_the_mono_sum_as_it_was() {
+        using var eq = Fx.Create(
+            ChannelEq.Id,
+            (ChannelEq.HighPassOn, 1),
+            (ChannelEq.HighPassFrequency, 300),
+            (ChannelEq.HighPassPlace, ChannelEq.Side),
+            (ChannelEq.Peak3Gain, 9),
+            (ChannelEq.Peak3Place, ChannelEq.Side)
+        );
+        var (music, right) = Fx.Music(24_000);
+        var (l, r) = Fx.Run(eq, music, right);
+        Assert.True(NullResidualDb(Mix(music, right, 1), Mix(l, r, 1)) < -120);
+    }
+
+    [Fact]
+    public void A_low_cut_on_the_side_monos_the_bass() {
+        using var eq = Fx.Create(
+            ChannelEq.Id,
+            (ChannelEq.HighPassOn, 1),
+            (ChannelEq.HighPassFrequency, 200),
+            (ChannelEq.HighPassSlope, 3),
+            (ChannelEq.HighPassPlace, ChannelEq.Side)
+        );
+        var bass = TestWav.Sine(50, (int)Fx.Rate, 1, 0.25f);
+        var (l, r) = Fx.Run(eq, bass, new float[bass.Length]); // hard left: mid and side alike
+        var settled = Fx.Rate / 2;
+        Assert.True(ToDb(Rms(Mix(l, r, -1).AsSpan((int)settled)) / Rms(bass.AsSpan((int)settled))) < -60);
+    }
+
+    [Fact]
+    public void An_old_state_without_placement_or_dynamics_loads_with_them_off() {
+        // A state of the original 31 parameters, as saved before these existed: only the ones it holds are set.
+        using var saved = Fx.Create(ChannelEq.Id, (ChannelEq.Peak2Gain, 6));
+        var state = saved.SaveState()!;
+        var stripped = Keep(state, ChannelEq.Output + 1);
+        using var loaded = BuiltinEffects.Create(ChannelEq.Id)!;
+        loaded.Prepare(Fx.Rate, 1_024);
+        Assert.True(loaded.LoadState(stripped));
+        Assert.Equal(6, loaded.GetParameter(ChannelEq.Peak2Gain));
+        Assert.Equal(ChannelEq.Stereo, loaded.GetParameter(ChannelEq.Peak2Place));
+        Assert.Equal(0, loaded.GetParameter(ChannelEq.Dynamics[2].On));
+    }
+
+    /// <summary>The state with only its first <paramref name="count" /> parameters, as an older version wrote it.</summary>
+    static byte[] Keep(byte[] state, int count) {
+        var at = 5;
+        at += 2 + BitConverter.ToUInt16(state, at); // the id
+        at += 2 + BitConverter.ToUInt16(state, at); // the file
+        var counted = at;
+        at += 2;
+        for (var i = 0; i < count; i++) {
+            at += 2 + BitConverter.ToUInt16(state, at) + 4;
+        }
+
+        var kept = state[..at];
+        BitConverter.GetBytes((ushort)count).CopyTo(kept, counted);
+        return kept;
+    }
+
+    // ---- Dynamic bands ----------------------------------------------------------------------------------------------
+
+    static (int, float)[] Dynamic(int band, float threshold, float ratio, float range) {
+        var d = ChannelEq.Dynamics[band];
+        return [(d.On, 1), (d.Threshold, threshold), (d.Ratio, ratio), (d.Range, range)];
+    }
+
+    static double Settled(IAudioEffect eq, double hz, float amplitude) {
+        var tone = TestWav.Sine(hz, (int)Fx.Rate, 2, amplitude);
+        var (left, _) = Fx.Run(eq, tone);
+        var half = (int)Fx.Rate;
+        return ToDb(Rms(left.AsSpan(half)) / Rms(tone.AsSpan(half)));
+    }
+
+    [Theory]
+    [InlineData(-10, -30, 4, -24, -15)] // 20 dB over at 4:1: 15 dB
+    [InlineData(-10, -30, 2, -24, -10)]
+    [InlineData(-10, -30, 4, -6, -6)] // the range stops it
+    [InlineData(-10, -60, 10, -12, -12)]
+    [InlineData(-40, -30, 4, -24, 0)] // under the threshold
+    [InlineData(-10, -30, 2, 9, 9)] // a positive range boosts when loud
+    [InlineData(-20, -30, 2, 24, 5)]
+    public void A_dynamic_bell_moves_as_a_compressor_would(
+        float levelDb,
+        float threshold,
+        float ratio,
+        float range,
+        double gainDb
+    ) {
+        using var eq = Fx.Create(
+            ChannelEq.Id,
+            [
+                (ChannelEq.Peak2Frequency, 1_000), (ChannelEq.Peak2Q, 2),
+                (ChannelEq.DynamicRelease, 50), ..Dynamic(2, threshold, ratio, range)
+            ]
+        );
+        // The detector reads the band's peak, a sine's amplitude.
+        Assert.Equal(gainDb, Settled(eq, 1_000, Decibels.ToGain(levelDb)), 0.15);
+        Assert.Equal(gainDb, ((ChannelEq)eq).DynamicGain(2), 0.15);
+    }
+
+    [Fact]
+    public void A_dynamic_band_adds_to_its_own_gain() {
+        using var eq = Fx.Create(
+            ChannelEq.Id,
+            [(ChannelEq.Peak2Frequency, 1_000), (ChannelEq.Peak2Gain, 4), ..Dynamic(2, -30, 4, -24)]
+        );
+        Assert.Equal(4 - 15, Settled(eq, 1_000, Decibels.ToGain(-10f)), 0.15);
+    }
+
+    [Fact]
+    public void A_dynamic_band_hears_only_its_own_band() {
+        using var eq = Fx.Create(
+            ChannelEq.Id,
+            [(ChannelEq.Peak4Frequency, 6_000), (ChannelEq.Peak4Q, 4), ..Dynamic(4, -40, 10, -24)]
+        );
+        Assert.Equal(0, Settled(eq, 100, 0.5f), 0.05);
+        Assert.True(((ChannelEq)eq).DynamicGain(4) > -0.5, $"{((ChannelEq)eq).DynamicGain(4)}");
+    }
+
+    [Fact]
+    public void A_dynamic_low_shelf_hears_the_bass_and_a_high_shelf_the_top() {
+        using var low = Fx.Create(
+            ChannelEq.Id,
+            [(ChannelEq.LowShelfFrequency, 200), ..Dynamic(0, -30, 10, -9)]
+        );
+        Assert.Equal(-9, Settled(low, 60, 0.5f), 0.2);
+        low.Reset();
+        Assert.Equal(0, Settled(low, 4_000, 0.5f), 0.1);
+        using var high = Fx.Create(
+            ChannelEq.Id,
+            [(ChannelEq.HighShelfFrequency, 4_000), ..Dynamic(5, -30, 10, -9)]
+        );
+        Assert.Equal(-9, Settled(high, 12_000, 0.5f), 0.3);
+        high.Reset();
+        Assert.Equal(0, Settled(high, 200, 0.5f), 0.1);
+    }
+
+    [Fact]
+    public void A_dynamic_band_cuts_a_probe_tone_beside_the_one_that_triggers_it() {
+        // A loud 1 kHz holds the band down; a quiet tone at the band's skirt is cut by the bell's own curve there.
+        using var eq = Fx.Create(
+            ChannelEq.Id,
+            [(ChannelEq.Peak2Frequency, 1_000), (ChannelEq.Peak2Q, 1), ..Dynamic(2, -40, 10, -12)]
+        );
+        var loud = TestWav.Sine(1_000, (int)Fx.Rate, 2, 0.25f);
+        var probe = TestWav.Sine(1_500, (int)Fx.Rate, 2, 0.002f);
+        var both = new float[loud.Length];
+        for (var i = 0; i < both.Length; i++) {
+            both[i] = loud[i] + probe[i];
+        }
+
+        var (left, _) = Fx.Run(eq, both);
+        var bell = BiquadCoefficients.Design(BiquadType.Peak, Fx.Rate, 1_000, 1, -12);
+        var start = (int)Fx.Rate;
+        var measured = Spectrum(left, start, 32_768)[(int)Math.Round(1_500 * 32_768.0 / Fx.Rate)].Magnitude;
+        var reference = Spectrum(probe, start, 32_768)[(int)Math.Round(1_500 * 32_768.0 / Fx.Rate)].Magnitude;
+        Assert.Equal(ToDb(bell.MagnitudeAt(1_500, Fx.Rate)), ToDb(measured / reference), 0.3);
+    }
+
+    [Fact]
+    public void A_dynamic_band_reaches_its_gain_at_attack_and_lets_go_at_release() {
+        using var eq = (ChannelEq)Fx.Create(
+            ChannelEq.Id,
+            [
+                (ChannelEq.Peak2Frequency, 1_000), (ChannelEq.DynamicAttack, 20), (ChannelEq.DynamicRelease, 100),
+                ..Dynamic(2, -40, 10, -12)
+            ]
+        );
+        var loud = TestWav.Sine(1_000, (int)Fx.Rate, 0.02, 0.25f);
+        Fx.Run(eq, loud);
+        Assert.InRange(eq.DynamicGain(2), -12 * 0.72, -12 * 0.52); // one time constant: 63 %
+        Fx.Run(eq, TestWav.Sine(1_000, (int)Fx.Rate, 0.5, 0.25f));
+        Assert.Equal(-12, eq.DynamicGain(2), 0.05);
+        Fx.Run(eq, new float[(int)(0.1 * Fx.Rate)]);
+        // The detector falls first: it takes 50 ms to drop below the level the range clips at, then the gain lets go.
+        Assert.InRange(eq.DynamicGain(2), -11, -6);
+        Fx.Run(eq, new float[(int)(0.5 * Fx.Rate)]);
+        Assert.InRange(eq.DynamicGain(2), -0.1, 0);
+    }
+
+    [Fact]
+    public void A_dynamic_band_on_the_mid_hears_and_touches_only_the_mid() {
+        using var eq = Fx.Create(
+            ChannelEq.Id,
+            [(ChannelEq.Peak2Frequency, 1_000), (ChannelEq.Peak2Place, ChannelEq.Mid), ..Dynamic(2, -40, 10, -12)]
+        );
+        var tone = TestWav.Sine(1_000, (int)Fx.Rate, 1, 0.25f);
+        var silence = new float[tone.Length];
+        // All side: the detector hears nothing.
+        var (left, right) = Fx.Run(eq, Stereo(silence, tone).Left, Stereo(silence, tone).Right);
+        Assert.Equal(0, ((ChannelEq)eq).DynamicGain(2), 0.05);
+        Assert.True(NullResidualDb(Stereo(silence, tone).Left, left) < -100);
+        eq.Reset();
+        (left, right) = Fx.Run(eq, Stereo(tone, silence).Left, Stereo(tone, silence).Right);
+        Assert.Equal(-12, ((ChannelEq)eq).DynamicGain(2), 0.1);
+        Assert.True(Rms(right.AsSpan(24_000)) < 0.3f * Rms(tone.AsSpan(24_000)));
+    }
+
+    [Fact]
+    public void Display_starts_with_the_dynamic_gains() {
+        using var eq = Fx.Create(ChannelEq.Id, [(ChannelEq.Peak2Frequency, 1_000), ..Dynamic(2, -40, 10, -12)]);
+        Fx.Run(eq, TestWav.Sine(1_000, (int)Fx.Rate, 1, 0.25f));
+        var display = (IEffectDisplay)eq;
+        var values = new float[display.DisplaySize];
+        display.ReadDisplay(values);
+        Assert.Equal(-12, values[2], 0.1);
+        Assert.Equal(0, values[0]);
+        Assert.Equal(0, values[5]);
     }
 
     [Theory]

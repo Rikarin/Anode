@@ -68,7 +68,8 @@ test('shows live plugin displays from the real engine', async ({ app, window }) 
     await window.getByRole('button', { name: 'Import audio' }).click();
     await expect(window.getByRole('img', { name: /^Tracks area:/ })).toHaveAttribute(
       'aria-label',
-      'Tracks area: 1 region on 1 track'
+      'Tracks area: 1 region on 1 track',
+      { timeout: 60_000 } // the import analyses the file's tempo first, which takes a while on a loaded machine
     );
     await window.locator('body').click({ position: { x: 5, y: 300 } });
     await window.keyboard.press('x');
@@ -99,6 +100,12 @@ test('shows live plugin displays from the real engine', async ({ app, window }) 
         timeout: 15_000
       })
       .toBeGreaterThan(0.6);
+    // Peak 2 becomes dynamic: the tone leans on its skirt, and the band's handle shows the gain moving.
+    const second = eq.locator('[data-band="peak2"]');
+    await second.focus();
+    await eq.getByTestId('eq-band-settings').locator('[data-parameter="peak2Dyn"]').locator('xui-select').click();
+    await window.getByRole('listbox').getByRole('option', { name: 'On', exact: true }).click();
+    await expect(second).toHaveAttribute('aria-valuetext', /dynamic −[1-9]/, { timeout: 15_000 });
     await eq.getByRole('button', { name: /^Close/ }).click();
 
     // Multipressor: the tone is in band 3, and its meter says so.

@@ -1,6 +1,9 @@
 /** What a band of an EQ does. */
 export type EqBandKind = 'highPass' | 'lowPass' | 'lowShelf' | 'bell' | 'highShelf';
 
+/** Where a band works: on both channels, or on the mid or the side alone. */
+export type EqPlace = 'stereo' | 'mid' | 'side';
+
 /** One band of an EQ, as the graph draws it and the curve adds it up. */
 export interface EqBand {
   /** A stable key (the parameter stem: `peak2`, `hpf`). */
@@ -15,6 +18,10 @@ export interface EqBand {
   readonly q: number;
   /** The cuts' slope: 0…3 for 12, 24, 36 and 48 dB/octave. */
   readonly slope: number;
+  /** Which of the signal it works on; both channels when left out. */
+  readonly place?: EqPlace;
+  /** Whether the band is dynamic: its gain follows its own level. */
+  readonly dynamic?: boolean;
   /** What a dynamic band is adding to its gain right now, dB (0 otherwise). */
   readonly dynamicDb?: number;
 }

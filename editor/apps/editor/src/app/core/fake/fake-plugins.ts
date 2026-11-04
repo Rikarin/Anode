@@ -134,6 +134,17 @@ function effect(
 
 const Slopes = ['12 dB/oct', '24 dB/oct', '36 dB/oct', '48 dB/oct'];
 const OffOn = ['Off', 'On'];
+const Places = ['Stereo', 'Mid', 'Side'];
+const EqBandNames = [
+  ['hpf', 'Low Cut'],
+  ['lowShelf', 'Low Shelf'],
+  ['peak1', 'Peak 1'],
+  ['peak2', 'Peak 2'],
+  ['peak3', 'Peak 3'],
+  ['peak4', 'Peak 4'],
+  ['highShelf', 'High Shelf'],
+  ['lpf', 'High Cut']
+] as const;
 
 /** A Channel EQ cut, as the engine lists it. */
 const eqCut = (id: string, name: string, hz: number, on: number): ParameterInfo[] => [
@@ -165,7 +176,16 @@ export const FakeEffects: readonly PluginInfo[] = [
     ...eqBand('peak4', 'Peak 4', 6_000, 1, 20),
     ...eqBand('highShelf', 'High Shelf', 10_000, 0.71, 2),
     ...eqCut('lpf', 'High Cut', 18_000, 0),
-    continuous('output', 'Output Gain', -24, 24, 0, 'dB')
+    continuous('output', 'Output Gain', -24, 24, 0, 'dB'),
+    ...EqBandNames.map(([id, name]) => choice(`${id}Place`, `${name} Placement`, Places)),
+    ...EqBandNames.filter(([id]) => id !== 'hpf' && id !== 'lpf').flatMap(([id, name]) => [
+      choice(`${id}Dyn`, `${name} Dynamic`, OffOn),
+      continuous(`${id}DynThreshold`, `${name} Threshold`, -60, 0, -24, 'dB'),
+      continuous(`${id}DynRatio`, `${name} Ratio`, 1, 10, 2, ':1'),
+      continuous(`${id}DynRange`, `${name} Range`, -24, 24, -6, 'dB')
+    ]),
+    continuous('dynAttack', 'Dynamic Attack', 0.5, 200, 10, 'ms'),
+    continuous('dynRelease', 'Dynamic Release', 5, 2_000, 150, 'ms')
   ]),
   effect(
     'anode.compressor',

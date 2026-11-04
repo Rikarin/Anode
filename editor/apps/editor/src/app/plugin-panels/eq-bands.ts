@@ -1,4 +1,4 @@
-import type { EqBand, EqBandKind } from '@anode/audio-ui/lazy';
+import type { EqBand, EqBandKind, EqPlace } from '@anode/audio-ui/lazy';
 
 /** A band of the engine's EQs, by parameter id. Both EQs share the ids (`docs/effects/T2.md`). */
 export interface EqBandParameters {
@@ -10,6 +10,13 @@ export interface EqBandParameters {
   readonly gain?: string;
   readonly q?: string;
   readonly slope?: string;
+  /** The Channel EQ's placement (the Linear Phase EQ has none). */
+  readonly place: string;
+  /** The Channel EQ's dynamics, on a bell or shelf. */
+  readonly dynamic?: string;
+  readonly threshold?: string;
+  readonly ratio?: string;
+  readonly range?: string;
 }
 
 const bell = (id: string, label: string, kind: EqBandKind = 'bell'): EqBandParameters => ({
@@ -19,7 +26,12 @@ const bell = (id: string, label: string, kind: EqBandKind = 'bell'): EqBandParam
   on: `${id}On`,
   frequency: `${id}Freq`,
   gain: `${id}Gain`,
-  q: `${id}Q`
+  q: `${id}Q`,
+  place: `${id}Place`,
+  dynamic: `${id}Dyn`,
+  threshold: `${id}DynThreshold`,
+  ratio: `${id}DynRatio`,
+  range: `${id}DynRange`
 });
 
 const cut = (id: string, label: string, kind: EqBandKind): EqBandParameters => ({
@@ -28,7 +40,8 @@ const cut = (id: string, label: string, kind: EqBandKind): EqBandParameters => (
   kind,
   on: `${id}On`,
   frequency: `${id}Freq`,
-  slope: `${id}Slope`
+  slope: `${id}Slope`,
+  place: `${id}Place`
 });
 
 /** The eight bands, low to high, as they read on the graph. */
@@ -49,14 +62,29 @@ const LinearShelfMaxQ = 1;
 /** The EQ's output-gain parameter. */
 export const EqOutput = 'output';
 
+/** The bands an EQ's display sends after the dynamic gains (`SpectrumAnalyzer.DisplayBands`). */
+export const EqSpectrumBands = 64;
+
 /** Every parameter id a panel needs, for its pattern. */
 export const EqParameterIds: readonly string[] = [
   ...EqBands.flatMap(b => [b.on, b.frequency, b.gain, b.q, b.slope].filter((id): id is string => !!id)),
   EqOutput
 ];
 
-/** The bands as `value` says they stand. */
-export function eqBandsOf(pluginId: string, value: (id: string) => number): EqBand[] {
+const Places: readonly EqPlace[] = ['stereo', 'mid', 'side'];
+
+/** The Channel EQ's dynamic bands, in the order of its display's first values. */
+export const EqDynamicBands: readonly EqBandParameters[] = EqBands.filter(b => !!b.dynamic);
+
+/**
+ * The bands as `value` says they stand; `dynamicDb` what the dynamic ones add now, as the display sends it. The Linear
+ * Phase EQ's `value` knows no placement or dynamics, which read 0.
+ */
+export function eqBandsOf(
+  pluginId: string,
+  value: (id: string) => number,
+  dynamicDb: readonly number[] = []
+): EqBand[] {
   return EqBands.map(b => {
     const q = b.q ? value(b.q) : 1;
     const shelf = b.kind === 'lowShelf' || b.kind === 'highShelf';
@@ -68,7 +96,10 @@ export function eqBandsOf(pluginId: string, value: (id: string) => number): EqBa
       frequency: value(b.frequency),
       gainDb: b.gain ? value(b.gain) : 0,
       q: shelf && pluginId === 'anode.linear-eq' ? Math.min(q, LinearShelfMaxQ) : q,
-      slope: b.slope ? Math.round(value(b.slope)) : 0
+      slope: b.slope ? Math.round(value(b.slope)) : 0,
+      place: Places[Math.round(value(b.place))] ?? 'stereo',
+      dynamic: !!b.dynamic && value(b.dynamic) >= 0.5,
+      dynamicDb: dynamicDb[EqDynamicBands.indexOf(b)] ?? 0
     };
   });
 }

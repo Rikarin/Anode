@@ -136,6 +136,51 @@ describe('EQ panel', () => {
     expect(element.querySelector('[data-testid="eq-analyser"]')).toBeNull();
   });
 
+  it('reads the Channel EQ’s dynamic gains before its spectrum', async () => {
+    const { element, values, spectrum, handle, fixture } = await render(channelEq);
+    values.update(v => ({ ...v, peak2Dyn: 1 }));
+    spectrum.set([0, 0, -4.5, 0, 0, 0, ...Array.from({ length: 64 }, () => -30)]);
+    await fixture.whenStable();
+    expect(handle('peak2').getAttribute('aria-valuetext')).toContain('dynamic −4.5 dB');
+    expect(handle('peak2').classList).toContain('ring-2');
+    expect(element.querySelector('[data-testid="eq-analyser"]')?.getAttribute('d')).toContain('L');
+  });
+
+  it('shows the focused band’s placement, and its dynamics once it is dynamic', async () => {
+    const { element, values, handle, fixture } = await render(channelEq);
+    const settings = () => element.querySelector('[data-testid="eq-band-settings"]');
+    const parameters = () => [...(settings()?.querySelectorAll('an-panel-parameter') ?? [])].length;
+    expect(settings()?.textContent).toContain('Peak 2');
+    expect(parameters()).toBe(2); // placement, dynamic
+    handle('peak3').dispatchEvent(new FocusEvent('focus'));
+    await fixture.whenStable();
+    expect(settings()?.textContent).toContain('Peak 3');
+    values.update(v => ({ ...v, peak3Dyn: 1 }));
+    await fixture.whenStable();
+    expect(parameters()).toBe(7);
+    handle('hpf').dispatchEvent(new FocusEvent('focus'));
+    await fixture.whenStable();
+    expect(parameters()).toBe(1); // a cut has a placement alone
+  });
+
+  it('splits the curve once a band is placed, and says so', async () => {
+    const { element, values, handle, fixture } = await render(channelEq);
+    expect(element.querySelector('[data-testid="eq-curve-side"]')).toBeNull();
+    values.update(v => ({ ...v, peak2Gain: 9, peak2Place: 2 }));
+    await fixture.whenStable();
+    const main = element.querySelector('[data-testid="eq-curve"]')?.getAttribute('points');
+    const side = element.querySelector('[data-testid="eq-curve-side"]')?.getAttribute('points');
+    expect(side).toBeTruthy();
+    expect(side).not.toBe(main);
+    expect(handle('peak2').getAttribute('aria-valuetext')).toContain(', side');
+  });
+
+  it('has no settings row on the Linear Phase EQ', async () => {
+    const { element } = await render(linearEq);
+    expect(element.querySelector('[data-testid="eq-band-settings"]')).toBeNull();
+    expect(element.querySelectorAll('[data-testid="eq-handle"]')).toHaveLength(8);
+  });
+
   it('settles the analyser: up at once, down gently', () => {
     expect(settleSpectrum([-40, -40], [-20, -60])).toEqual([-20, -47]);
     expect(settleSpectrum([], [-20])).toEqual([-20]);

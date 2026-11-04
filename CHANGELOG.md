@@ -15,3 +15,5 @@ All notable changes to Anode are recorded here, by hand.
 - New utility effects and meters, each with its panel: Tuner, Test Oscillator, Expander, Frequency Spread, Oscilloscope
   and Phase Meter with a goniometer (docs/effects/parity.md). Plugin windows show the MultiMeter's correlation as a
   correlation, not LUFS.
+- Channel EQ: any band can work on the mid or the side alone, and a bell or shelf can be dynamic, its gain following its
+  own band's level. Older projects and states load with both off and sound the same.

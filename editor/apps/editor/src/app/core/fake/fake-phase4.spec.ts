@@ -455,7 +455,7 @@ describe('FakeAnodeServer, patches, I/O labels, plugin editors and problems', ()
     const shown = reading(pressor?.id);
     expect(shown?.values).toHaveLength(4);
     expect(shown?.value).toBe(Math.min(...(shown?.values ?? [])));
-    expect(reading(eq?.id)?.values).toHaveLength(64);
+    expect(reading(eq?.id)?.values).toHaveLength(6 + 64);
     // The lease runs out unless a window renews it.
     time += 3_000;
     expect(reading(pressor?.id)?.values ?? null).toBeNull();

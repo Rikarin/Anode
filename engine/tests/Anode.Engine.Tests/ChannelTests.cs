@@ -234,7 +234,7 @@ public sealed class ChannelTests : IDisposable {
         lock (pushed) {
             var last = pushed.OfType<InsertReadingsMessage>().Last().Readings;
             Assert.Equal(4, last.First(static r => r.InsertId == "p").Values?.Length);
-            Assert.Equal(64, last.First(static r => r.InsertId == "q").Values?.Length);
+            Assert.Equal(6 + 64, last.First(static r => r.InsertId == "q").Values?.Length); // dynamic gains, spectrum
             Assert.Null(last.First(static r => r.InsertId == "m").Values);
         }
 

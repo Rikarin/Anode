@@ -19,12 +19,46 @@ the issue's Stereo Spread is `anode.frequency-spread`.
 | `anode.scope` | Oscilloscope | Metering | Keeps 4 s of stereo; a trace of 1 ms … 2 s, free or triggered on a rising or falling crossing of Level on the left channel, read on the control thread | 0 |
 | `anode.phase-meter` | Phase Meter | Metering | `StereoImage` (correlation and balance over an exponential window, shared with MultiMeter), and a goniometer of the last 66 ms | 0 |
 
+## Channel EQ: dynamic bands and mid/side
+
+`anode.channel-eq` gains two things on top of its eight bands, as parameters after the original ones, so a state or
+project saved without them loads as it played. Its golden render did not change.
+
+- **Placement** (`{band}Place`: Stereo, Mid, Side, on all eight bands). A placed band takes left and right to mid and side
+  around itself and back. A band on the side leaves the mono sum as it was, within rounding; a low cut there monos the
+  bass.
+- **Dynamic bands** (`{band}Dyn`, `{band}DynThreshold`, `{band}DynRatio`, `{band}DynRange` on the bells and shelves, and
+  `dynAttack`, `dynRelease` for all). A detector hears the input (before the EQ) through a band-pass at the band's
+  frequency and Q, or a shelf's low- or high-pass, in the band's placement. Its 30 ms peak goes through
+  `GainComputer.Gain` (a 6 dB knee); the reduction, limited by Range, is added to the band's gain: a negative range cuts
+  when loud, a positive one boosts. It moves at Attack and Release on the 32-sample control grid, and the band is
+  redesigned there (the trapezoidal SVF does not click).
+
+The Linear Phase EQ has neither: a FIR redesigned per control interval is not a dynamic filter, and it keeps the Channel
+EQ's first 31 parameter ids, so a setting still moves between the two (the extras are ignored).
+
+The editor's curve follows: a dynamic band's handle gets a ring and the curve moves with what it adds, and once a band is
+placed the curve splits, the side's dashed. The focused band's placement and dynamics show under the graph.
+
+| What | Target | Measured (`EqTests`) |
+|---|---|---|
+| +12 dB bell on Mid, Side, Stereo | 12 dB on its signal, 0 on the other | within 0.02 dB |
+| Bands on the side, mono sum | unchanged | residual under −120 dB |
+| Low cut on the side (48 dB/oct, 200 Hz), 50 Hz hard left | side gone | under −60 dB |
+| Dynamic bell, −10 dBFS tone, −30 dB threshold, 4:1 | −15 dB | within 0.15 dB, and in the display |
+| The same at 2:1; Range −6; Range +9 and +24 at 2:1 | −10; −6; +9; +5 | within 0.15 dB |
+| Under the threshold; a tone outside the band | no gain change | within 0.15 and 0.05 dB |
+| A quiet probe beside a loud trigger | the bell's own curve at the dynamic gain | within 0.3 dB |
+| Attack 20 ms | 63 % at one time constant | 52 … 72 % |
+| Dynamic band on the mid, all-side input | detector silent, signal untouched | residual under −100 dB |
+
 ## Displays
 
 `InsertReading.values`, while a window shows the insert (`IEffectDisplay`, see [T2.md](T2.md)):
 
 | Effect | `values` |
 |---|---|
+| Channel EQ | 70: each gain band's dynamic gain in dB (low shelf, peaks 1 to 4, high shelf), then the 64-band spectrum |
 | Tuner | 3: pitch in Hz (0 while nothing is heard), the note's MIDI number, cents |
 | Oscilloscope | 512: 256 left samples, then 256 right; a point of a long trace is the largest sample of its slice, so a click never falls between points |
 | Phase Meter | 514: correlation, balance in dB, then 256 pairs of side and mid, newest first |
