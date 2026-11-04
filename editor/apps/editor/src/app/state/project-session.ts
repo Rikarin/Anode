@@ -1,5 +1,5 @@
 import { Injectable, inject, signal } from '@angular/core';
-import type { ProjectAlternative, ProjectBackup, ProjectSummary } from '@anode/api-client';
+import type { ProjectAlternative, ProjectBackup, ProjectSummary, RecoverableProject } from '@anode/api-client';
 import { ANODE_API, type CreateProject } from '../core/api';
 import { Notify } from '../core/notify';
 import { ProjectStore } from './project.store';
@@ -18,6 +18,8 @@ export class ProjectSession {
   private readonly notify = inject(Notify);
 
   readonly recent = signal<ProjectSummary[]>([]);
+  /** Projects with autosaved edits nobody saved: what the project chooser offers after a crash. */
+  readonly recoverable = signal<RecoverableProject[]>([]);
   /** The open project's alternatives and backups (the project menu), as last listed. */
   readonly alternatives = signal<ProjectAlternative[]>([]);
   readonly backups = signal<ProjectBackup[]>([]);
@@ -30,6 +32,62 @@ export class ProjectSession {
   async refreshRecent(): Promise<void> {
     const recent = await this.notify.run(() => this.api.recentProjects(), 'Could not list recent projects');
     this.recent.set(recent ?? []);
+  }
+
+  async refreshRecoverable(): Promise<void> {
+    const recoverable = await this.notify.run(
+      () => this.api.recoverableProjects(),
+      'Could not list autosaved projects'
+    );
+    this.recoverable.set(recoverable ?? []);
+  }
+
+  /** Opens a project with its autosaved edits, unsaved; its saved version stays as it is until the next save. */
+  async recover(path: string): Promise<boolean> {
+    if (!this.mayDiscard('recover this project')) {
+      return false;
+    }
+
+    const recovered = await this.load(
+      'Recovering…',
+      () => this.api.recoverProject(path),
+      'Could not recover the project'
+    );
+    if (recovered) {
+      this.recoverable.update(projects => projects.filter(p => p.path !== path));
+    }
+
+    return recovered;
+  }
+
+  /** Stops offering a project's autosaved edits; the Server keeps them as the project's newest backup. */
+  async discardRecovery(path: string): Promise<boolean> {
+    const discarded = await this.notify.run(async () => {
+      await this.api.discardRecovery(path);
+      return true;
+    }, 'Could not discard the autosaved edits');
+    if (discarded) {
+      this.recoverable.update(projects => projects.filter(p => p.path !== path));
+    }
+
+    return discarded === true;
+  }
+
+  /**
+   * Whether the desktop app may quit. Told to discard unsaved edits, it closes the project, so the Server does not
+   * autosave them on its way out and offer them at the next launch; they stay in a backup.
+   */
+  async mayQuit(): Promise<boolean> {
+    const discards = this.project.isOpen() && this.project.dirty();
+    if (!this.mayDiscard('quit')) {
+      return false;
+    }
+
+    if (discards) {
+      await this.api.closeProject().catch(() => undefined);
+    }
+
+    return true;
   }
 
   /** Whether the open project's unsaved edits may be dropped to `then` ("quit"): asks when there are any. */
@@ -57,7 +115,28 @@ export class ProjectSession {
       return false;
     }
 
-    return this.load(`Opening ${path}…`, () => this.api.openProject(path.trim()), 'Could not open the project');
+    const folder = path.trim();
+    if (await this.wantsRecovery(folder)) {
+      return this.load(`Recovering ${folder}…`, () => this.api.recoverProject(folder), 'Could not recover the project');
+    }
+
+    return this.load(`Opening ${path}…`, () => this.api.openProject(folder), 'Could not open the project');
+  }
+
+  /**
+   * Whether to open `folder` with its autosaved edits: the person is asked when it has some. Opening the saved version
+   * instead keeps them as a backup.
+   */
+  private async wantsRecovery(folder: string): Promise<boolean> {
+    const projects = await this.api.recoverableProjects().catch(() => [] as RecoverableProject[]);
+    const pending = projects.find(p => p.path === folder.replace(/[/\\]+$/, ''));
+    return (
+      pending !== undefined &&
+      this.confirm(
+        `“${pending.name}” has edits autosaved at ${new Date(pending.autosaved).toLocaleString()} that were never ` +
+          'saved. Recover them? If not, the saved version opens and the edits stay in a backup.'
+      )
+    );
   }
 
   async save(): Promise<boolean> {

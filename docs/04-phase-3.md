@@ -137,6 +137,24 @@ report. A REST change means regenerating `engine/src/Anode.Server/openapi.json`
 - **Alternatives and backups:**
   - An alternative is a full package under `Alternatives/<id>/`; the current one is the package root.
   - Every save first copies the previous `project.json` and track files to `Backups/<timestamp>/`, keeping ten.
+- **Autosave and crash recovery:**
+  - Every 30 seconds (`Anode:AutosaveSeconds`; 0 turns it off), and when the Server stops, new unsaved edits go to the
+    package's `Autosave/`. Nothing there is ever the saved document: `project.json`, `tracks/` and `Plugin States/` at
+    the root change only on a save.
+  - `Autosave/` holds two slots, each a package document, and `autosave.json`, which names the slot with the snapshot.
+    A write fills the other slot, one atomically renamed file at a time and only the files that differ, and then
+    renames a new `autosave.json` into place. That rename is the commit: a write stopped anywhere leaves the previous
+    snapshot whole.
+  - The write runs on the Server's thread pool from the immutable project state, without the session's lock, so edits go
+    on during it. It sends nothing to `anode-host`: plugin states are the ones last saved or brought by a patch, and a
+    change only a plugin's own state holds is not autosaved.
+  - A save removes the snapshot, as does keeping the edits in a backup (closing, or replacing the open project). So a
+    snapshot that outlives its session holds edits nobody saved. `autosave.json` records `project.json`'s write time: a
+    snapshot from before a later save (a crash between the two) is not offered.
+  - `GET /projects/recoverable` lists the recent projects with such a snapshot, and the project chooser offers them.
+    `POST /projects/recover` opens the project with the edits, unsaved; the snapshot stays until they are saved, so a
+    second crash loses nothing. Everything else that drops a snapshot moves it to a new backup first:
+    `POST /projects/recoverable/discard`, or opening the saved version.
 - **Screensets, key commands, bookmarks:**
   - Screensets are saved in the project (they mark it unsaved, but are not undo steps).
   - Key commands and bookmarks are per user, in `<DataDirectory>/settings/`.

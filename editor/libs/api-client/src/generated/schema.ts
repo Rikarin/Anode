@@ -106,6 +106,57 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  '/api/v1/projects/recoverable': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** Recent projects with autosaved edits their last save does not have. */
+    get: operations['ListRecoverableProjects'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/projects/recover': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Opens a project with its autosaved edits, closing the open one. The saved project is untouched until the next save; the edits show as unsaved. */
+    post: operations['RecoverProject'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/projects/recoverable/discard': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Stops offering a project's autosaved edits; they stay available as its newest backup. */
+    post: operations['DiscardRecovery'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   '/api/v1/project': {
     parameters: {
       query?: never;
@@ -6755,6 +6806,17 @@ export interface components {
       /** Format: int64 */
       punchOutTick: number;
     };
+    /**
+     * @description A project whose edits since its last save survive in an autosave, offered after a crash (docs/04-phase-3.md,
+     *     "Autosave and crash recovery"). `autosaved` is when they were last written.
+     */
+    RecoverableProject: {
+      id: string;
+      name: string;
+      path: string;
+      /** Format: date-time */
+      autosaved: string;
+    };
     /** @description Regenerate (`POST /project/regions/{id}/session-player/regenerate`): a new seed (left out: drawn). */
     RegenerateRequest: {
       /** Format: int64 */
@@ -8069,6 +8131,113 @@ export interface operations {
         content: {
           'application/json': components['schemas']['Project'];
         };
+      };
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails'];
+        };
+      };
+    };
+  };
+  ListRecoverableProjects: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['RecoverableProject'][];
+        };
+      };
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails'];
+        };
+      };
+    };
+  };
+  RecoverProject: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['OpenProjectRequest'];
+      };
+    };
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Project'];
+        };
+      };
+      /** @description Not Found */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails'];
+        };
+      };
+    };
+  };
+  DiscardRecovery: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['OpenProjectRequest'];
+      };
+    };
+    responses: {
+      /** @description No Content */
+      204: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Not Found */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
       };
       /** @description Internal Server Error */
       500: {

@@ -67,6 +67,7 @@ import {
   type ProjectAlternative,
   type ProjectBackup,
   type ProjectSummary,
+  type RecoverableProject,
   type RegenerateRequest,
   type RemotePads,
   type SampleRange,
@@ -177,6 +178,12 @@ export interface AnodeApi {
   /** Switches to another alternative; resolves with it as the open project. */
   openAlternative(id: string): Promise<Project>;
   deleteAlternative(id: string): Promise<void>;
+  /** Recent projects with autosaved edits their last save lacks (offered after a crash). */
+  recoverableProjects(): Promise<RecoverableProject[]>;
+  /** Opens a project with its autosaved edits, which show as unsaved. */
+  recoverProject(path: string): Promise<Project>;
+  /** Stops offering a project's autosaved edits; they stay available as its newest backup. */
+  discardRecovery(path: string): Promise<void>;
   /** The current alternative's backups, newest first. */
   backups(): Promise<ProjectBackup[]>;
   /** Replaces the open project with a backup (like reopening it: no undo step). */
@@ -412,6 +419,18 @@ export class HttpAnodeApi implements AnodeApi {
 
   async recentProjects(): Promise<ProjectSummary[]> {
     return unwrap(await this.client.GET('/api/v1/projects/recent'));
+  }
+
+  async recoverableProjects(): Promise<RecoverableProject[]> {
+    return unwrap(await this.client.GET('/api/v1/projects/recoverable'));
+  }
+
+  async recoverProject(path: string): Promise<Project> {
+    return unwrap(await this.client.POST('/api/v1/projects/recover', { body: { path } }));
+  }
+
+  async discardRecovery(path: string): Promise<void> {
+    unwrap(await this.client.POST('/api/v1/projects/recoverable/discard', { body: { path } }));
   }
 
   async createProject(request: CreateProject): Promise<Project> {

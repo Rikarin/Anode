@@ -82,6 +82,14 @@ public static class ProjectHistory {
         return Path.GetFileName(target);
     }
 
+    /// <summary>Copies the document at <paramref name="source" /> to a new backup of the package; its id.</summary>
+    public static string BackupDocument(string folder, string source, DateTimeOffset now) {
+        var target = NewBackupFolder(folder, now);
+        CopyDocument(source, target);
+        Prune(folder);
+        return Path.GetFileName(target);
+    }
+
     /// <summary>Writes <paramref name="state" /> (unsaved edits) as a new backup; its id.</summary>
     public static string BackupState(string folder, ProjectState state, DateTimeOffset now) {
         var target = NewBackupFolder(folder, now);

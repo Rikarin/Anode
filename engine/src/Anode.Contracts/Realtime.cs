@@ -10,6 +10,8 @@ namespace Anode.Contracts;
 [JsonDerivedType(typeof(ProjectOpenedEvent), "projectOpened")]
 [JsonDerivedType(typeof(ProjectClosedEvent), "projectClosed")]
 [JsonDerivedType(typeof(ProjectSavedEvent), "projectSaved")]
+[JsonDerivedType(typeof(ProjectAutosavedEvent), "projectAutosaved")]
+[JsonDerivedType(typeof(AutosaveFailedEvent), "autosaveFailed")]
 [JsonDerivedType(typeof(ProjectChangedEvent), "projectChanged")]
 [JsonDerivedType(typeof(TransportEvent), "transport")]
 [JsonDerivedType(typeof(MetersEvent), "meters")]
@@ -49,6 +51,12 @@ public sealed record ProjectOpenedEvent(ProjectSummary Project, long Revision) :
 public sealed record ProjectClosedEvent : RealtimeEvent;
 
 public sealed record ProjectSavedEvent(ProjectSummary Project, long Revision) : RealtimeEvent;
+
+/// <summary>The open project's unsaved edits, up to <c>revision</c>, are safe in its autosave.</summary>
+public sealed record ProjectAutosavedEvent(long Revision, DateTimeOffset Autosaved) : RealtimeEvent;
+
+/// <summary>An autosave failed, for the first time since one last worked: unsaved edits are not safe.</summary>
+public sealed record AutosaveFailedEvent(string Message) : RealtimeEvent;
 
 /// <summary>An edit, undo or redo (from any client, or a finished recording) changed the project.</summary>
 public sealed record ProjectChangedEvent(ProjectDelta Delta) : RealtimeEvent;

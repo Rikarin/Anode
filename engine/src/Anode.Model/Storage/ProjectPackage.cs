@@ -88,6 +88,7 @@ public static class ProjectPackage {
     public const string AudioFolder = "Audio Files";
     public const string PeaksFolder = "Peaks";
     public const string BackupsFolder = "Backups";
+    public const string AutosaveFolder = "Autosave";
     public const string PluginStatesFolder = "Plugin States";
     public const string StateExtension = ".bin";
 
@@ -107,7 +108,14 @@ public static class ProjectPackage {
     ///     Writes <paramref name="state" />'s document; with <paramref name="media" />, also creates the media folders
     ///     (a backup has none of its own).
     /// </summary>
-    public static void Save(string folder, ProjectState state, bool media = true) {
+    public static void Save(string folder, ProjectState state, bool media = true) =>
+        Save(folder, state, media, AtomicRename.Write);
+
+    /// <summary>
+    ///     Writes a package as <see cref="Save(string, ProjectState, bool)" /> does, each file through
+    ///     <paramref name="write" /> (an autosave skips the files that have not changed).
+    /// </summary>
+    public static void Save(string folder, ProjectState state, bool media, Action<string, byte[]> write) {
         if (media) {
             CreateFolders(folder);
         } else {
@@ -132,9 +140,9 @@ public static class ProjectPackage {
                 [..state.PatternRegionsOf(track.Id)],
                 [..state.SessionPlayerRegionsOf(track.Id)]
             );
-            AtomicRename.Write(
+            write(
                 Path.Combine(tracksFolder, TrackFileName(track.Id)),
-                JsonSerializer.Serialize(file, PackageJsonContext.Default.TrackFile)
+                JsonSerializer.SerializeToUtf8Bytes(file, PackageJsonContext.Default.TrackFile)
             );
         }
 
@@ -162,9 +170,9 @@ public static class ProjectPackage {
             state.ChordTrack,
             state.Environment
         );
-        AtomicRename.Write(
+        write(
             Path.Combine(folder, ProjectFileName),
-            JsonSerializer.Serialize(root, PackageJsonContext.Default.ProjectFile)
+            JsonSerializer.SerializeToUtf8Bytes(root, PackageJsonContext.Default.ProjectFile)
         );
 
         var kept = state.Tracks.Select(static t => TrackFileName(t.Id)).ToHashSet(StringComparer.Ordinal);
@@ -780,14 +788,25 @@ public static class ProjectPackage {
     ///     Writes the plugins' opaque states by key (<see cref="StateKey" />): <c>Plugin States/&lt;key&gt;.bin</c> each,
     ///     and removes the state files of keys not in <paramref name="states" />.
     /// </summary>
-    public static void SaveStates(string folder, IReadOnlyDictionary<string, byte[]> states) {
+    public static void SaveStates(string folder, IReadOnlyDictionary<string, byte[]> states) =>
+        SaveStates(folder, states, AtomicRename.Write);
+
+    /// <summary>
+    ///     Writes the plugin states as <see cref="SaveStates(string, IReadOnlyDictionary{string, byte[]})" /> does, each
+    ///     file through <paramref name="write" />.
+    /// </summary>
+    public static void SaveStates(
+        string folder,
+        IReadOnlyDictionary<string, byte[]> states,
+        Action<string, byte[]> write
+    ) {
         var statesFolder = Path.Combine(folder, PluginStatesFolder);
         if (states.Count > 0) {
             Directory.CreateDirectory(statesFolder);
         }
 
         foreach (var (trackId, state) in states) {
-            AtomicRename.Write(Path.Combine(statesFolder, StateFileName(trackId)), state);
+            write(Path.Combine(statesFolder, StateFileName(trackId)), state);
         }
 
         if (Directory.Exists(statesFolder)) {
@@ -1561,4 +1580,5 @@ static class Schema4 {
 [JsonSerializable(typeof(TrackFile))]
 [JsonSerializable(typeof(List<ProjectSummary>))]
 [JsonSerializable(typeof(AlternativesFile))]
+[JsonSerializable(typeof(AutosaveManifest))]
 public sealed partial class PackageJsonContext : JsonSerializerContext;

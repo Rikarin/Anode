@@ -284,5 +284,11 @@ public sealed record CreateProjectRequest(string Name, string? Directory, int? S
 
 public sealed record OpenProjectRequest(string Path);
 
+/// <summary>
+///     A project whose edits since its last save survive in an autosave, offered after a crash (docs/04-phase-3.md,
+///     "Autosave and crash recovery"). <c>autosaved</c> is when they were last written.
+/// </summary>
+public sealed record RecoverableProject(string Id, string Name, string Path, DateTimeOffset Autosaved);
+
 /// <summary>Import an audio file the server can read from its own disk (the desktop app, a headless box's library).</summary>
 public sealed record ImportFileRequest(string Path);

@@ -1,6 +1,6 @@
 import { ChangeDetectionStrategy, Component, inject, signal } from '@angular/core';
 import { provideIcons } from '@ng-icons/core';
-import { matFolderOpenRound, matHistoryRound } from '@ng-icons/material-icons/round';
+import { matFolderOpenRound, matHistoryRound, matRestoreRound } from '@ng-icons/material-icons/round';
 import { XuiButtonImports } from '@xui/button';
 import { XuiIconImports } from '@xui/icon';
 import { XuiInputImports } from '@xui/input';
@@ -17,14 +17,14 @@ const SampleRates: XuiSegmentedOption<number>[] = [
 
 /**
  * The project chooser (Logic's Project Chooser, docs/01-implementation-plan.md §6.1 `projects`): a new project (name,
- * folder, sample rate), the recent ones, or one opened by its folder. The desktop app picks folders with its native
+ * folder, sample rate), the recent ones, or one opened by its folder, and first of all any edits a crash left unsaved. The desktop app picks folders with its native
  * dialog; a browser types the path on the Server's disk.
  */
 @Component({
   selector: 'an-project-chooser',
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [XuiButtonImports, XuiIconImports, XuiInputImports, XuiSegmentedControlImports],
-  providers: [provideIcons({ matFolderOpenRound, matHistoryRound })],
+  providers: [provideIcons({ matFolderOpenRound, matHistoryRound, matRestoreRound })],
   host: {
     class: 'flex h-full items-start justify-center overflow-auto p-8 pt-16',
     role: 'region',
@@ -32,6 +32,53 @@ const SampleRates: XuiSegmentedOption<number>[] = [
   },
   template: `
     <div class="grid w-full max-w-4xl gap-6 md:grid-cols-2">
+      @if (session.recoverable().length > 0) {
+        <section
+          class="panel flex flex-col gap-3 p-5 md:col-span-2"
+          aria-labelledby="recover-projects"
+          data-testid="recovery"
+        >
+          <div class="flex flex-col gap-1">
+            <h2 id="recover-projects" class="flex items-center gap-2 text-[15px] font-semibold">
+              <ng-icon xui name="matRestoreRound" size="sm" />
+              Recover unsaved edits
+            </h2>
+            <p class="text-foreground-muted text-sm">
+              Anode stopped before these edits were saved. Discarded edits stay under Revert to Backup.
+            </p>
+          </div>
+          @for (project of session.recoverable(); track project.path) {
+            <div class="flex items-center gap-3">
+              <div class="flex min-w-0 flex-1 flex-col">
+                <span class="text-sm font-medium">{{ project.name }}</span>
+                <span class="text-foreground-muted truncate text-xs" [attr.title]="project.path">
+                  Autosaved {{ when(project.autosaved) }}
+                </span>
+              </div>
+              <button
+                xuiButton
+                type="button"
+                variant="outline"
+                [attr.data-testid]="'discard-recovery-' + project.name"
+                [attr.aria-label]="'Discard the autosaved edits of ' + project.name"
+                (click)="session.discardRecovery(project.path)"
+              >
+                Discard
+              </button>
+              <button
+                xuiButton
+                type="button"
+                [attr.data-testid]="'recover-' + project.name"
+                [attr.aria-label]="'Recover ' + project.name"
+                [loading]="session.busy() !== null"
+                (click)="session.recover(project.path)"
+              >
+                Recover
+              </button>
+            </div>
+          }
+        </section>
+      }
       <section class="panel flex flex-col gap-4 p-5" aria-labelledby="new-project">
         <h2 id="new-project" class="text-[15px] font-semibold">New project</h2>
         <form class="flex flex-col gap-3" (submit)="$event.preventDefault(); create()">
@@ -145,6 +192,11 @@ export class ProjectChooser {
 
   constructor() {
     void this.session.refreshRecent();
+    void this.session.refreshRecoverable();
+  }
+
+  protected when(iso: string): string {
+    return new Date(iso).toLocaleString();
   }
 
   protected async create(): Promise<void> {
