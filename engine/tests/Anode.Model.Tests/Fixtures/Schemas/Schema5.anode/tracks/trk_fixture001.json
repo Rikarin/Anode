@@ -1,0 +1,96 @@
+{
+  "schemaVersion": 5,
+  "track": {
+    "id": "trk_fixture001",
+    "name": "Vocal",
+    "kind": "audio",
+    "color": "#4f8ff7",
+    "input": {
+      "channel": 1,
+      "stereo": false
+    },
+    "recordArmed": false,
+    "inputMonitoring": false,
+    "strip": {
+      "volumeDb": -2.5,
+      "pan": -0.25,
+      "mute": false,
+      "solo": false,
+      "inserts": [
+        {
+          "id": "ins_fixture009",
+          "pluginId": "anode.synth.fx",
+          "name": "anode.synth.fx",
+          "bypassed": false,
+          "parameters": {}
+        }
+      ],
+      "sends": [
+        {
+          "id": "snd_fixture008",
+          "bus": 1,
+          "levelDb": -9,
+          "pan": 0,
+          "preFader": false
+        }
+      ],
+      "output": "master",
+      "groups": [],
+      "midiEffects": []
+    },
+    "midiInput": {
+      "channel": 0
+    },
+    "collapsed": false,
+    "notes": "",
+    "inputBus": 0,
+    "automationMode": "read",
+    "flexOn": true,
+    "flexMode": "polyphonic",
+    "alternatives": [],
+    "liveLoopsActive": false
+  },
+  "regions": [
+    {
+      "id": "rgn_fixture002",
+      "trackId": "trk_fixture001",
+      "fileId": "aud_fixture",
+      "name": "Tone",
+      "startTick": 1920,
+      "fileOffset": 0,
+      "length": 48000,
+      "gainDb": -1,
+      "fadeIn": 480,
+      "fadeOut": 960,
+      "fadeInCurve": 0,
+      "fadeOutCurve": 0,
+      "muted": false,
+      "follow": "off",
+      "flexMarkers": [],
+      "transpose": 2,
+      "fineTune": 0,
+      "pitchNotes": []
+    }
+  ],
+  "midiRegions": [],
+  "takeFolders": [],
+  "automation": [
+    {
+      "id": "aut_fixture010",
+      "trackId": "trk_fixture001",
+      "target": "volume",
+      "points": [
+        {
+          "tick": 0,
+          "value": -6,
+          "curve": 0
+        },
+        {
+          "tick": 3840,
+          "value": 0,
+          "curve": 0
+        }
+      ]
+    }
+  ]
+}

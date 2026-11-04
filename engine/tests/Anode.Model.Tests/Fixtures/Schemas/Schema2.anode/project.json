@@ -1,0 +1,74 @@
+{
+  "schemaVersion": 2,
+  "id": "prj_schema2",
+  "name": "Schema 2",
+  "sampleRate": 48000,
+  "settings": {
+    "tempo": 120,
+    "signature": {
+      "numerator": 4,
+      "denominator": 4
+    },
+    "cycle": {
+      "enabled": false,
+      "startTick": 0,
+      "endTick": 15360
+    },
+    "metronome": {
+      "enabled": false,
+      "countIn": false,
+      "levelDb": -6
+    },
+    "endTick": 491520,
+    "mergeMidiRecording": false,
+    "tempoEvents": [
+      {
+        "tick": 0,
+        "bpm": 120,
+        "curve": "step"
+      }
+    ],
+    "signatures": [
+      {
+        "tick": 0,
+        "numerator": 4,
+        "denominator": 4
+      }
+    ],
+    "keys": [
+      {
+        "tick": 0,
+        "tonic": 0,
+        "mode": "major"
+      }
+    ],
+    "recording": {
+      "cycleMode": "takeFolder",
+      "replace": false,
+      "autopunch": false,
+      "punchInTick": 0,
+      "punchOutTick": 15360
+    }
+  },
+  "master": {
+    "volumeDb": 0,
+    "pan": 0,
+    "mute": false,
+    "solo": false
+  },
+  "tracks": [
+    "trk_fixture001",
+    "trk_fixture003"
+  ],
+  "audioFiles": [
+    {
+      "id": "aud_fixture",
+      "name": "Tone",
+      "path": "Audio Files/Tone.wav",
+      "sampleRate": 48000,
+      "channels": 1,
+      "frames": 48000,
+      "bitDepth": 24
+    }
+  ]
+}

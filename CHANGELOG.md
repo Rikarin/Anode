@@ -15,3 +15,5 @@ All notable changes to Anode are recorded here, by hand.
   another sample rate.
 - Project and track templates: the chooser offers factory and user templates, a project saves as one with its media, and
   tracks save with their routing, plugins and states and come back on buses of their own.
+- Migration fixtures: a package written by the real build of each schema, 1 to 11, loads through the chain with what it
+  held, with properties that the chain leaves what is there alone and that a damaged file is read or refused.
