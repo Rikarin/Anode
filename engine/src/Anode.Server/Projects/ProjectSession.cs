@@ -32,6 +32,9 @@ public sealed record OpenProjectView(
 ) {
     public string AudioFolder => Path.Combine(Folder, ProjectPackage.AudioFolder);
 
+    /// <summary>What the disk lacked of the project when last checked.</summary>
+    public OfflineReport Offline { get; init; } = OfflineReport.None;
+
     /// <summary>The state saved for <paramref name="track" />'s instrument, when it is still that instrument's.</summary>
     public byte[]? StateOf(Track track) =>
         track.Instrument is { } slot && States.TryGetValue(track.Id, out var saved) && saved.PluginId == slot.PluginId
@@ -92,6 +95,14 @@ public sealed partial class ProjectSession(
     public const int MaxLayoutLength = 1 << 20;
 
     readonly Lock gate = new();
+
+    /// <summary>
+    ///     Held across a background autosave's disk write, which must not hold <see cref="gate" /> (edits go on during
+    ///     it). Whatever saves the project or replaces it takes this first, then the gate, so it never meets a write in
+    ///     flight. Edits take only the gate and never wait for the disk.
+    /// </summary>
+    readonly Lock autosaving = new();
+
     readonly RandomIds ids = RandomIds.Instance;
     Open? open;
     long sessions;
@@ -179,10 +190,12 @@ public sealed partial class ProjectSession(
     public ProjectSummary Save(IReadOnlyDictionary<string, byte[]?>? hostStates = null) {
         ProjectSummary summary;
         bool cleared;
-        lock (gate) {
-            var o = Required();
-            cleared = ClearSavedValues(o);
-            summary = SaveLocked(o, hostStates);
+        lock (autosaving) {
+            lock (gate) {
+                var o = Required();
+                cleared = ClearSavedValues(o);
+                summary = SaveLocked(o, hostStates);
+            }
         }
 
         if (cleared) {
@@ -207,6 +220,7 @@ public sealed partial class ProjectSession(
             throw ProjectException.Unprocessable($"Could not save '{o.Folder}': {e.Message}");
         }
 
+        DropAutosave(o);
         o.States = states;
         PruneVersions(o);
         Publish();
@@ -279,45 +293,49 @@ public sealed partial class ProjectSession(
             throw ProjectException.Unprocessable($"An alternative's name has 1…{Edits.MaxNameLength} characters.");
         }
 
-        lock (gate) {
-            var o = Required();
-            var id = ids.Next(IdPrefix.Alternative);
-            var now = time.GetUtcNow();
-            try {
-                ProjectHistory.CreateAlternative(o.Folder, o.State.Name, id, trimmed, now);
-            } catch (Exception e) when (e is IOException or UnauthorizedAccessException or PackageException) {
-                throw ProjectException.Unprocessable($"Could not save the alternative: {e.Message}");
-            }
+        lock (autosaving) {
+            lock (gate) {
+                var o = Required();
+                var id = ids.Next(IdPrefix.Alternative);
+                var now = time.GetUtcNow();
+                try {
+                    ProjectHistory.CreateAlternative(o.Folder, o.State.Name, id, trimmed, now);
+                } catch (Exception e) when (e is IOException or UnauthorizedAccessException or PackageException) {
+                    throw ProjectException.Unprocessable($"Could not save the alternative: {e.Message}");
+                }
 
-            SaveLocked(o, hostStates);
-            return new(id, trimmed, now, true);
+                SaveLocked(o, hostStates);
+                return new(id, trimmed, now, true);
+            }
         }
     }
 
     /// <summary>Switches to another alternative; unsaved edits of the current one are kept in a backup first.</summary>
     public Project OpenAlternative(string id) {
         string folder;
-        lock (gate) {
-            var o = Required();
-            var manifest = ProjectHistory.Alternatives(o.Folder, o.State.Name);
-            if (id == manifest.Current) {
-                return o.ToProject();
-            }
+        lock (autosaving) {
+            lock (gate) {
+                var o = Required();
+                var manifest = ProjectHistory.Alternatives(o.Folder, o.State.Name);
+                if (id == manifest.Current) {
+                    return o.ToProject();
+                }
 
-            if (!manifest.Alternatives.Any(a => a.Id == id)
-                || !ProjectPackage.IsSafeId(id)
-                || !ProjectPackage.Exists(ProjectHistory.AlternativeFolder(o.Folder, id))) {
-                throw ProjectException.NotFound($"No alternative '{id}'.");
-            }
+                if (!manifest.Alternatives.Any(a => a.Id == id)
+                    || !ProjectPackage.IsSafeId(id)
+                    || !ProjectPackage.Exists(ProjectHistory.AlternativeFolder(o.Folder, id))) {
+                    throw ProjectException.NotFound($"No alternative '{id}'.");
+                }
 
-            try {
-                KeepUnsaved(o);
-                ProjectHistory.OpenAlternative(o.Folder, o.State.Name, id, time.GetUtcNow());
-            } catch (Exception e) when (e is IOException or UnauthorizedAccessException or PackageException) {
-                throw ProjectException.Unprocessable($"Could not open the alternative: {e.Message}");
-            }
+                try {
+                    KeepUnsaved(o);
+                    ProjectHistory.OpenAlternative(o.Folder, o.State.Name, id, time.GetUtcNow());
+                } catch (Exception e) when (e is IOException or UnauthorizedAccessException or PackageException) {
+                    throw ProjectException.Unprocessable($"Could not open the alternative: {e.Message}");
+                }
 
-            folder = o.Folder;
+                folder = o.Folder;
+            }
         }
 
         return OpenFolder(folder);
@@ -354,24 +372,26 @@ public sealed partial class ProjectSession(
     /// </summary>
     public Project RevertToBackup(string id) {
         string folder;
-        lock (gate) {
-            var o = Required();
-            var backup = ProjectHistory.BackupFolder(o.Folder, id)
-                ?? throw ProjectException.NotFound($"No backup '{id}'.");
-            try {
-                var state = ProjectPackage.Load(backup);
-                var states = ProjectPackage.LoadStates(backup, state);
-                KeepUnsaved(o);
-                ProjectHistory.Backup(o.Folder, time.GetUtcNow());
-                ProjectPackage.Save(o.Folder, state);
-                ProjectPackage.SaveStates(o.Folder, states);
-            } catch (PackageException e) {
-                throw ProjectException.Unprocessable(e.Message);
-            } catch (Exception e) when (e is IOException or UnauthorizedAccessException) {
-                throw ProjectException.Unprocessable($"Could not revert to the backup: {e.Message}");
-            }
+        lock (autosaving) {
+            lock (gate) {
+                var o = Required();
+                var backup = ProjectHistory.BackupFolder(o.Folder, id)
+                    ?? throw ProjectException.NotFound($"No backup '{id}'.");
+                try {
+                    var state = ProjectPackage.Load(backup);
+                    var states = ProjectPackage.LoadStates(backup, state);
+                    KeepUnsaved(o);
+                    ProjectHistory.Backup(o.Folder, time.GetUtcNow());
+                    ProjectPackage.Save(o.Folder, state);
+                    ProjectPackage.SaveStates(o.Folder, states);
+                } catch (PackageException e) {
+                    throw ProjectException.Unprocessable(e.Message);
+                } catch (Exception e) when (e is IOException or UnauthorizedAccessException) {
+                    throw ProjectException.Unprocessable($"Could not revert to the backup: {e.Message}");
+                }
 
-            folder = o.Folder;
+                folder = o.Folder;
+            }
         }
 
         return OpenFolder(folder);
@@ -382,6 +402,7 @@ public sealed partial class ProjectSession(
         if (o.Dirty) {
             ProjectHistory.BackupState(o.Folder, o.State, time.GetUtcNow());
             o.Dirty = false;
+            DropAutosave(o);
         }
     }
 
@@ -434,12 +455,14 @@ public sealed partial class ProjectSession(
     }
 
     public void Close() {
-        lock (gate) {
-            Required();
-            open = null;
-            ResetStepInput();
-            Publish();
-            hub.Publish(new ProjectClosedEvent());
+        lock (autosaving) {
+            lock (gate) {
+                KeepOnClose(Required());
+                open = null;
+                ResetStepInput();
+                Publish();
+                hub.Publish(new ProjectClosedEvent());
+            }
         }
 
         Changed?.Invoke();
@@ -1356,24 +1379,34 @@ public sealed partial class ProjectSession(
             )
             .ContinueWith(static _ => { }, TaskScheduler.Default);
 
-    Project Replace(string folder, ProjectState state, ImmutableDictionary<string, SavedState>? states = null) {
+    Project Replace(
+        string folder,
+        ProjectState state,
+        ImmutableDictionary<string, SavedState>? states = null,
+        bool recovered = false
+    ) {
         Project project;
+        using var writes = autosaving.EnterScope();
+        var offline = OfflineFiles.Report(folder, state);
         lock (gate) {
-            if (open is { Dirty: true } old) {
+            if (open is { } old) {
                 // Unsaved edits of the project being replaced are kept beside it, as a backup.
-                try {
-                    ProjectHistory.BackupState(old.Folder, old.State, time.GetUtcNow());
-                } catch (Exception e) when (e is IOException or UnauthorizedAccessException) {
-                    ProjectLog.BackupFailed(logger, old.Folder, e.Message);
-                }
+                KeepOnClose(old);
+            }
+
+            if (!recovered) {
+                KeepAutosave(folder);
             }
 
             ResetStepInput();
             open = new(++sessions, folder, state, new(time)) {
                 States = states ?? ImmutableDictionary.Create<string, SavedState>(StringComparer.Ordinal),
                 Analyses = FileAnalyses.CachedAll(folder, state.Files.Values)
-                    .ToImmutableDictionary(StringComparer.Ordinal)
+                    .ToImmutableDictionary(StringComparer.Ordinal),
+                Dirty = recovered,
+                Offline = offline
             };
+            open.MarkAutosaved(open.Changes);
             Publish();
             project = open.ToProject();
             var summary = open.Summary(time.GetUtcNow());
@@ -1381,7 +1414,8 @@ public sealed partial class ProjectSession(
             hub.Publish(new ProjectOpenedEvent(summary, open.Revision));
         }
 
-        foreach (var file in state.Files.Values) {
+        var online = offline.Files.Select(static f => f.FileId).ToHashSet(StringComparer.Ordinal);
+        foreach (var file in state.Files.Values.Where(f => !online.Contains(f.Id))) {
             StartPeaks(file);
         }
 
@@ -1392,10 +1426,14 @@ public sealed partial class ProjectSession(
     CommandResult Commit(Open o, ProjectState state, IReadOnlyList<DeltaOp> ops) {
         NoteScripts(o.State, state);
         NoteVersions(o, o.State, state);
+        var filesChanged = !ReferenceEquals(o.State.Files, state.Files);
         o.State = state;
         o.Revision++;
         o.Dirty = true;
-        Publish();
+        if (!filesChanged || !Note(o, OfflineFiles.Report(o.Folder, state))) {
+            Publish();
+        }
+
         var delta = new ProjectDelta(o.Revision, ops);
         hub.Publish(new ProjectChangedEvent(delta));
         return new(o.Revision, delta);
@@ -1407,7 +1445,7 @@ public sealed partial class ProjectSession(
             Volatile.Write(
                 ref view,
                 new(o.Session, o.Folder, o.State, o.Ids, o.Revision, o.States, o.Analyses) {
-                    Mastering = mastering, HrtfPath = hrtfs.Path
+                    Mastering = mastering, HrtfPath = hrtfs.Path, Offline = o.Offline
                 }
             );
         } else {
@@ -1448,7 +1486,23 @@ public sealed partial class ProjectSession(
         public string Folder { get; } = folder;
         public ProjectState State { get; set; } = state;
         public long Revision { get; set; } = 1;
-        public bool Dirty { get; set; }
+
+        public bool Dirty {
+            get;
+            set {
+                field = value;
+                Changes += value ? 1 : 0;
+            }
+        }
+
+        /// <summary>How many changes were made since opening: what an autosave has caught up with, or has not.</summary>
+        public long Changes { get; private set; }
+
+        /// <summary>The value of <see cref="Changes" /> the last autosave holds.</summary>
+        public long Autosaved { get; private set; }
+
+        public void MarkAutosaved(long changes) => Autosaved = changes;
+
         public EditHistory History { get; } = history;
         public EngineIds Ids { get; set; } = EngineIds.Empty;
 
@@ -1462,7 +1516,10 @@ public sealed partial class ProjectSession(
         public ImmutableDictionary<string, SavedState> States { get; set; } =
             ImmutableDictionary.Create<string, SavedState>(StringComparer.Ordinal);
 
-        public Project ToProject() => State.ToProject(Folder, Revision, Dirty);
+        /// <summary>What the disk lacked when last checked.</summary>
+        public OfflineReport Offline { get; set; } = OfflineReport.None;
+
+        public Project ToProject() => State.ToProject(Folder, Revision, Dirty, Offline);
 
         public ProjectSummary Summary(DateTimeOffset now) => new(State.Id, State.Name, Folder, now);
     }

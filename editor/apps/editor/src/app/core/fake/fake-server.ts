@@ -72,6 +72,12 @@ import {
   type MusicXmlExportRequest,
   type MusicXmlImportRequest,
   type Note,
+  type OfflineCandidate,
+  type OfflineFile,
+  type OfflineReason,
+  type OfflineReport,
+  type OfflineSearch,
+  type OfflineSearchRequest,
   type OscSettings,
   type OscStatus,
   type Pack,
@@ -86,7 +92,9 @@ import {
   type ProjectBackup,
   type ProjectDelta,
   type ProjectSummary,
+  type RecoverableProject,
   type RegenerateRequest,
+  type RelinkRequest,
   type RemotePads,
   type SampleRange,
   type SavePatchRequest,
@@ -142,12 +150,14 @@ import {
   meterOf,
   moveSection,
   packTakeFolder,
+  pasteRegions,
   replaceRange,
   shiftFolder,
   sortSections,
   tempoOf
 } from './fake-arrange';
 import { fakePeaks, hash, readWavHeader } from './fake-audio';
+import { FakeAudioDevices } from './fake-audio-devices';
 import { applyEnvironmentCommand } from './fake-environment';
 import { fakeFileExists, FakeHome, fileKind, listFakeFolder } from './fake-files';
 import { adaptTempo, applyFlexCommand, fakeAnalysis, type FlexContext, timingOf } from './fake-flex';
@@ -302,6 +312,38 @@ interface HeldNote {
 /** A note a recording pass captured, in project ticks. */
 type TakeNote = HeldNote & { lengthTicks: number };
 
+/** How long after an edit the realtime fake autosaves (the Server's default). */
+const AutosaveMilliseconds = 30_000;
+
+/** What a WAV on the fake disk holds. */
+export interface WavFormat {
+  sampleRate: number;
+  channels: number;
+  frames: number;
+  bitDepth: number;
+}
+
+/** A path's or name's last part without its extension. */
+function stemOf(path: string): string {
+  return (path.split('/').pop() ?? path).replace(/\.wave?$/i, '');
+}
+
+/** What keeps a WAV from being `file`, as the Server's `OfflineFiles.Mismatch` says; null when it can be. */
+function mismatch(file: AudioFile, format: WavFormat): string | null {
+  if (format.sampleRate !== file.sampleRate) {
+    return `It is at ${format.sampleRate} Hz, not ${file.sampleRate} Hz.`;
+  }
+  if (file.channels === 0) {
+    return format.frames < file.frames
+      ? `It has ${format.frames} frames; the regions reach frame ${file.frames}.`
+      : null;
+  }
+  if (format.channels !== file.channels) {
+    return `It has ${format.channels} channels, not ${file.channels}.`;
+  }
+  return format.frames === file.frames ? null : `It has ${format.frames} frames, not ${file.frames}.`;
+}
+
 export interface FakeServerOptions {
   /** Milliseconds, for undo coalescing and the transport (Date.now by default). */
   now?: () => number;
@@ -309,6 +351,8 @@ export interface FakeServerOptions {
   realtime?: boolean;
   /** A project to start with open (fake dev mode, stories). */
   demo?: boolean;
+  /** With `demo`: its audio files are offline, one findable in the fake disk's Music folder (`?fake&offline`). */
+  offline?: boolean;
 }
 
 /**
@@ -319,6 +363,8 @@ export interface FakeServerOptions {
  */
 export class FakeAnodeServer implements AnodeApi {
   private readonly listeners = new Set<(message: ServerMessage) => void>();
+  /** The WAVs on the fake disk that searches and relinks can find. */
+  private readonly wavs = new Map<string, WavFormat>();
   private readonly now: () => number;
   private readonly disk = new Map<string, Project>();
   private recent: ProjectSummary[] = [];
@@ -403,6 +449,9 @@ export class FakeAnodeServer implements AnodeApi {
   /** Alternatives per project path; the current one's project is the open project (or what is on disk). */
   private readonly alternativeSets = new Map<string, { alternative: ProjectAlternative; project: Project | null }[]>();
   private readonly backupSets = new Map<string, { backup: ProjectBackup; project: Project }[]>();
+  /** What each project's autosave holds, by project path (docs/04-phase-3.md, "Autosave and crash recovery"). */
+  private readonly autosaves = new Map<string, { project: Project; autosaved: string }>();
+  private autosaveTimer: ReturnType<typeof setTimeout> | null = null;
   private readonly screensetSets = new Map<string, Screenset[]>();
   private keyCommandSet: KeyCommandSet = { bindings: {} };
   private bookmarkSet: Bookmarks = { paths: [`${FakeHome}/Music/Loops`, `${FakeHome}/Music/MIDI`] };
@@ -432,12 +481,28 @@ export class FakeAnodeServer implements AnodeApi {
     () => this.devices
   );
 
+  /** The desktop app's audio bridge, which the fake stands in for too: `engine` events follow its switches. */
+  readonly audioDevices = new FakeAudioDevices(engine => this.emit({ type: 'engine', engine }));
+
   constructor(options: FakeServerOptions = {}) {
     this.now = options.now ?? (() => Date.now());
     this.realtime = options.realtime ?? false;
     if (options.demo) {
       this.openDemo();
+      if (options.offline) {
+        this.goOffline();
+      }
     }
+  }
+
+  /** The demo with its audio offline: the first file has a match on the fake disk, the next a same-named impostor. */
+  private goOffline(): void {
+    this.require().audioFiles.forEach((file, index) => {
+      this.takeOffline(file.id);
+      const name = `/Users/anode/Music/${stemOf(file.path)}.wav`;
+      const { sampleRate, channels, bitDepth, frames } = file;
+      this.placeWav(name, { sampleRate, channels, bitDepth, frames: index === 0 ? frames : frames + 1 });
+    });
   }
 
   /** Receives every `/ws` message from now on; returns the unsubscribe. */
@@ -457,12 +522,72 @@ export class FakeAnodeServer implements AnodeApi {
   system(): Promise<SystemInfo> {
     return this.answer('GetSystem', () => ({
       version: '0.1.0-fake',
-      engine: { state: 'inprocess', backend: 'fake', hostVersion: '0.1.0-fake', message: null }
+      engine: this.audioDevices.engine
     }));
   }
 
   recentProjects(): Promise<ProjectSummary[]> {
     return this.answer('ListRecentProjects', () => this.recent.map(summary => ({ ...summary })));
+  }
+
+  recoverableProjects(): Promise<RecoverableProject[]> {
+    return this.answer('ListRecoverableProjects', () =>
+      this.recent.flatMap(({ id, name, path }) => {
+        const snapshot = path === this.project?.path ? undefined : this.autosaves.get(path);
+        return snapshot ? [{ id, name, path, autosaved: snapshot.autosaved }] : [];
+      })
+    );
+  }
+
+  recoverProject(path: string): Promise<Project> {
+    return this.answer('RecoverProject', () => {
+      if (path === this.project?.path) {
+        throw new ApiError(409, `${path} is open.`);
+      }
+      const snapshot = this.autosaves.get(path);
+      if (!snapshot) {
+        throw new ApiError(404, `${path} has no autosaved edits.`);
+      }
+      const project = { ...structuredClone(snapshot.project), revision: 0, dirty: true };
+      this.open(project, true);
+      return structuredClone(project);
+    });
+  }
+
+  discardRecovery(path: string): Promise<void> {
+    return this.answer('DiscardRecovery', () => {
+      if (!this.autosaves.has(path)) {
+        throw new ApiError(404, `${path} has no autosaved edits.`);
+      }
+      this.keepAutosave(path);
+    });
+  }
+
+  /** Writes unsaved edits to the project's autosave, as the Server does on its timer; whether it did. */
+  autosave(): boolean {
+    if (this.autosaveTimer) {
+      clearTimeout(this.autosaveTimer);
+      this.autosaveTimer = null;
+    }
+
+    const project = this.project;
+    if (!project?.dirty) {
+      return false;
+    }
+
+    const autosaved = new Date(this.now()).toISOString();
+    this.autosaves.set(project.path, { project: structuredClone(project), autosaved });
+    this.emit({ type: 'projectAutosaved', revision: project.revision, autosaved });
+    return true;
+  }
+
+  /** The Server dies: only what is saved or autosaved survives (tests). */
+  crash(): void {
+    this.stopEngine();
+    this.project = null;
+    this.undoStack = [];
+    this.redoStack = [];
+    this.emit({ type: 'projectClosed' });
   }
 
   createProject(request: CreateProject): Promise<Project> {
@@ -514,6 +639,7 @@ export class FakeAnodeServer implements AnodeApi {
         tracks: [],
         regions: [],
         audioFiles: [],
+        offline: { files: [], unreadableTracks: [] },
         midiRegions: [],
         takeFolders: [],
         markers: [],
@@ -576,6 +702,7 @@ export class FakeAnodeServer implements AnodeApi {
       }
       this.project = { ...project, dirty: false };
       this.disk.set(project.path, structuredClone(this.project));
+      this.autosaves.delete(project.path);
       const summary = this.remember(this.project);
       this.emit({ type: 'projectSaved', project: summary, revision: project.revision });
       return summary;
@@ -584,7 +711,9 @@ export class FakeAnodeServer implements AnodeApi {
 
   closeProject(): Promise<void> {
     return this.answer('CloseProject', () => {
-      this.require();
+      const project = this.require();
+      this.autosave();
+      this.keepAutosave(project.path);
       this.stopEngine();
       this.project = null;
       this.undoStack = [];
@@ -626,7 +755,9 @@ export class FakeAnodeServer implements AnodeApi {
       }
 
       this.redoStack.push(step);
-      return this.publish(project, step.before);
+      const result = this.publish(project, step.before);
+      this.noteOffline(project);
+      return result;
     });
   }
 
@@ -639,7 +770,9 @@ export class FakeAnodeServer implements AnodeApi {
       }
 
       this.undoStack.push(step);
-      return this.publish(project, step.after);
+      const result = this.publish(project, step.after);
+      this.noteOffline(project);
+      return result;
     });
   }
 
@@ -675,11 +808,114 @@ export class FakeAnodeServer implements AnodeApi {
     });
   }
 
+  /** Takes a file of the open project off the fake disk (`?fake&offline`, tests): it is offline, not gone. */
+  takeOffline(fileId: string, reason: OfflineReason = 'missing'): void {
+    const project = this.require();
+    const file = project.audioFiles.find(f => f.id === fileId);
+    if (!file) {
+      throw new ApiError(404, `No file ${fileId}.`);
+    }
+
+    const entry: OfflineFile = { fileId, name: file.name, path: file.path, reason, detail: null };
+    this.project = {
+      ...project,
+      offline: { ...project.offline, files: [...project.offline.files.filter(f => f.fileId !== fileId), entry] }
+    };
+    this.noteOffline(project);
+  }
+
+  /** Puts a WAV on the fake disk, where searches and relinks find it. */
+  placeWav(path: string, format: WavFormat): void {
+    this.wavs.set(path, format);
+  }
+
+  offline(): Promise<OfflineReport> {
+    return this.answer('GetOffline', () => structuredClone(this.require().offline));
+  }
+
+  searchOffline(request: OfflineSearchRequest): Promise<OfflineSearch> {
+    return this.answer('SearchOffline', () => {
+      const project = this.require();
+      const directory = (request.directory?.trim() || project.path).replace(/\/+$/, '');
+      const candidates: OfflineCandidate[] = [];
+      for (const [path, format] of this.wavs) {
+        const name = stemOf(path).toLowerCase();
+        if (!path.startsWith(`${directory}/`)) {
+          continue;
+        }
+
+        for (const entry of project.offline.files) {
+          const file = project.audioFiles.find(f => f.id === entry.fileId);
+          if (file && [stemOf(file.path).toLowerCase(), stemOf(file.name).toLowerCase()].includes(name)) {
+            candidates.push({ fileId: file.id, path, problem: mismatch(file, format) });
+          }
+        }
+      }
+      candidates.sort((a, b) => Number(a.problem !== null) - Number(b.problem !== null));
+      return { directory, candidates, truncated: false };
+    });
+  }
+
+  relinkFiles(request: RelinkRequest): Promise<CommandResult> {
+    return this.answer('RelinkFiles', () => {
+      const project = this.require();
+      if (request.files.length === 0) {
+        throw new ApiError(422, 'Name the files to relink.');
+      }
+
+      const relinked = new Map<string, AudioFile>();
+      for (const { fileId, path } of request.files) {
+        const file = project.audioFiles.find(f => f.id === fileId);
+        if (!file) {
+          throw new ApiError(404, `No audio file '${fileId}'.`);
+        }
+
+        const format = this.wavs.get(path);
+        if (!format) {
+          throw new ApiError(422, `'${path}' does not exist.`);
+        }
+
+        const problem = mismatch(file, format);
+        if (problem) {
+          throw new ApiError(422, `'${path.split('/').pop() ?? path}' is not '${file.name}': ${problem}`);
+        }
+
+        relinked.set(fileId, {
+          ...file,
+          ...format,
+          path: `Audio Files/${path.split('/').pop() ?? path}`,
+          version: file.version + 1
+        });
+      }
+
+      const after: Project = {
+        ...project,
+        audioFiles: project.audioFiles.map(f => relinked.get(f.id) ?? f),
+        offline: { ...project.offline, files: project.offline.files.filter(f => !relinked.has(f.fileId)) }
+      };
+      const result = this.commit(project, after, 'Relink Files');
+      this.noteOffline(project);
+      return result;
+    });
+  }
+
+  /** Tells clients when the open project's offline report differs from `before`'s. */
+  private noteOffline(before: Project): void {
+    const project = this.project;
+    if (project && JSON.stringify(project.offline) !== JSON.stringify(before.offline)) {
+      this.emit({ type: 'offlineChanged', offline: structuredClone(project.offline), revision: project.revision });
+    }
+  }
+
   peaks(fileId: string, framesPerPeak: number): Promise<ArrayBuffer> {
     return this.answer('GetPeaks', () => {
       const file = this.require().audioFiles.find(f => f.id === fileId);
       if (!file) {
         throw new ApiError(404, `No file ${fileId}.`);
+      }
+
+      if (this.require().offline.files.some(f => f.fileId === fileId)) {
+        throw new ApiError(422, `No peaks for '${fileId}'.`);
       }
 
       const edited = this.fileVersions.get(file.id)?.get(file.version);
@@ -4865,6 +5101,8 @@ export class FakeAnodeServer implements AnodeApi {
           : withPatterns;
         return rest.length ? copyRegions(copied, rest, offset, command.trackId, id) : copied;
       }
+      case 'pasteRegions':
+        return pasteRegions(project, command, id, () => this.nextId++);
       case 'addInsert':
       case 'removeInsert':
       case 'moveInsert':
@@ -5253,6 +5491,9 @@ export class FakeAnodeServer implements AnodeApi {
     const revision = previous.revision + 1;
     const project = { ...next, revision, dirty: true };
     this.project = project;
+    if (this.realtime) {
+      this.autosaveTimer ??= setTimeout(() => this.autosave(), AutosaveMilliseconds);
+    }
     const delta: ProjectDelta = { revision, ops: diff(previous, project) };
     this.emit({ type: 'projectChanged', delta });
     // The sync settings changed (setSyncSettings, an undo): the host's sync state follows.
@@ -5296,7 +5537,11 @@ export class FakeAnodeServer implements AnodeApi {
     return { ...file };
   }
 
-  private open(project: Project): void {
+  private open(project: Project, recovered = false): void {
+    if (!recovered) {
+      this.keepAutosave(project.path);
+    }
+
     this.stopEngine();
     this.positionTick = 0;
     this.project = project;
@@ -5304,6 +5549,20 @@ export class FakeAnodeServer implements AnodeApi {
     this.redoStack = [];
     const summary = this.remember(project);
     this.emit({ type: 'projectOpened', project: summary, revision: project.revision });
+  }
+
+  /** A snapshot not recovered goes to a backup, as on the Server: never lost, and out of the new session's way. */
+  private keepAutosave(path: string): void {
+    const snapshot = this.autosaves.get(path);
+    if (snapshot) {
+      const backups = this.backupSets.get(path) ?? [];
+      backups.unshift({
+        backup: { id: `bak_${this.nextId++}`, saved: new Date(this.now()).toISOString() },
+        project: snapshot.project
+      });
+      this.backupSets.set(path, backups.slice(0, 10));
+      this.autosaves.delete(path);
+    }
   }
 
   private remember(project: Project): ProjectSummary {
@@ -5379,6 +5638,7 @@ export class FakeAnodeServer implements AnodeApi {
       tracks: [],
       regions: [],
       audioFiles: [],
+      offline: { files: [], unreadableTracks: [] },
       midiRegions: [],
       takeFolders: [],
       markers: [],

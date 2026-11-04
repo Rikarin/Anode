@@ -3,11 +3,19 @@ import { readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 export interface AudioSettings {
-  /** Device uid, or null to run the engine on the null backend (no interface). */
+  /** Output device uid, '' for the system's default output, or null for the null backend (no interface). */
   device: string | null;
+  /** Input device uid, '' for no inputs, or null for the output device's own (or the system's default input). */
+  inputDevice: string | null;
   sampleRate: number;
   bufferFrames: number;
 }
+
+/**
+ * How a switch of audio device ended. A failed one changed nothing that lasts: `restored` says the engine runs on the
+ * previous settings again, and it is false only when those would not start either.
+ */
+export type AudioApplied = { applied: true } | { applied: false; error: string; restored: boolean };
 
 export type ServerTarget = { mode: 'local' } | { mode: 'remote'; baseUrl: string; token: string };
 
@@ -29,7 +37,7 @@ export interface Settings {
 }
 
 const Defaults: Settings = {
-  audio: { device: null, sampleRate: 48_000, bufferFrames: 128 },
+  audio: { device: null, inputDevice: null, sampleRate: 48_000, bufferFrames: 128 },
   target: { mode: 'local' },
   network: { enabled: false, port: 5190, token: '' }
 };

@@ -82,6 +82,39 @@ static class ProjectApi {
                 static Results<Ok<UndoHistory>, NotFound>(ProjectSession session) => TypedResults.Ok(session.History())
             )
             .WithName("GetHistory");
+        project.MapGet(
+                "/offline",
+                static Results<Ok<OfflineReport>, NotFound>(ProjectSession session) =>
+                    TypedResults.Ok(session.Offline())
+            )
+            .WithName("GetOffline")
+            .WithSummary("Reads the disk now: the project's offline files and unreadable tracks.");
+        project.MapPost(
+                "/offline/search",
+                static Results<Ok<OfflineSearch>, NotFound, ProblemHttpResult>(
+                    OfflineSearchRequest request,
+                    ProjectSession session
+                ) =>
+                    TypedResults.Ok(session.SearchOffline(request))
+            )
+            .WithName("SearchOffline")
+            .WithSummary(
+                "Looks through a folder of the server's disk (left out: the project's) for WAVs named as the offline "
+                + "files, and says of each whether its length, rate and channels match."
+            );
+        project.MapPost(
+                "/offline/relink",
+                static Results<Ok<CommandResult>, NotFound, ProblemHttpResult>(
+                    RelinkRequest request,
+                    AudioImport import
+                ) =>
+                    TypedResults.Ok(import.Relink(request))
+            )
+            .WithName("RelinkFiles")
+            .WithSummary(
+                "Points files of the project at WAVs on the server's disk, copied into Audio Files, as one undo step; "
+                + "422, changing nothing, when one's length, rate or channels do not match the file it replaces."
+            );
         project.MapPost(
                 "/files",
                 static async Task<Results<Ok<AudioFile>, NotFound, ProblemHttpResult>>(

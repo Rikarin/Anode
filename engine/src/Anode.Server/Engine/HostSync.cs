@@ -86,7 +86,7 @@ public sealed class HostSync(HostLink link, SegmentPool pool, ILogger logger, Se
 
     public static readonly TimeSpan LoadTimeout = TimeSpan.FromSeconds(5);
 
-    readonly HashSet<int> sentFiles = [];
+    readonly Dictionary<int, string> sentFiles = [];
     ModelCompiler compiler = new();
     long compilerSession = -1;
     OpenProjectView? sent;
@@ -207,6 +207,11 @@ public sealed class HostSync(HostLink link, SegmentPool pool, ILogger logger, Se
         // A global change (the tempo map) recompiles every track: one whole swap (docs/adr/0006-bulk-ipc.md).
         if (TempoChanged(previous.State, target.State)
             || previous.State.Tracks.Exists(t => Stacks.IsPlayable(t) && target.State.FindTrack(t.Id) is null)) {
+            return true;
+        }
+
+        // A file back online changes no track's segment, but the tracks that play it must pick it up.
+        if (previous.Offline.Files.Any(f => CameBack(target, f.FileId))) {
             return true;
         }
 
@@ -355,13 +360,22 @@ public sealed class HostSync(HostLink link, SegmentPool pool, ILogger logger, Se
         var files = new List<EngineFile>();
         foreach (var file in target.State.Files.Values) {
             var id = target.Ids.File(file.Id);
-            if (sentFiles.Add(id)) {
-                files.Add(new(id, Path.Combine(target.Folder, file.Path), file.Channels, file.SampleRate, file.Frames));
+            var path = Path.Combine(target.Folder, file.Path);
+            if (sentFiles.GetValueOrDefault(id) != path || CameBack(target, file.Id)) {
+                sentFiles[id] = path;
+                files.Add(new(id, path, file.Channels, file.SampleRate, file.Frames));
             }
         }
 
         return files;
     }
+
+    /// <summary>Whether a file was offline at the last sync and no longer is: the host opens it again.</summary>
+    bool CameBack(OpenProjectView target, string fileId) =>
+        sent is not null
+        && sent.Session == target.Session
+        && sent.Offline.Files.Any(f => f.FileId == fileId)
+        && target.Offline.Files.All(f => f.FileId != fileId);
 
     /// <summary>
     ///     Whether the tempo map changed: every track recompiles, and the segment's tempo points (with the signature,

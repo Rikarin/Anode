@@ -64,6 +64,8 @@ export interface SceneInput {
   selected: ReadonlySet<string>;
   /** The waveform key the renderer knows a file's peaks by. */
   waveformKey: (fileId: string) => number;
+  /** Files that are offline: their regions are drawn as such, named so. */
+  offline?: ReadonlySet<string>;
   /** A region's timing (Phase 5): a warped region is drawn through its map, its length where its last frame lands. */
   timing?: (region: AudioRegion) => RegionTiming;
 }
@@ -105,7 +107,7 @@ interface Draft {
  * The Tracks area's scene: one item per region on its track's row, in its track's colour, with its selection. Audio
  * regions carry their file mapping, fades and curves, gain, name and waveform; MIDI regions their note miniatures and
  * pattern regions their unrolled steps as notes; take folders show their comp (each segment's take waveform, drawn
- * inside the folder); an open folder's takes are rows of their own, greyed but for what the comp plays from them. Muted regions, folders and tracks are drawn muted.
+ * inside the folder); an open folder's takes are rows of their own, greyed but for what the comp plays from them. Muted regions, folders and tracks are drawn muted, and regions of offline files as offline.
  */
 export function buildScene(input: SceneInput): TracksScene {
   const rows: readonly LaneRow[] =
@@ -133,6 +135,7 @@ export function buildScene(input: SceneInput): TracksScene {
     const timing = input.timing?.(region);
     const warped = timing?.warped ? timing : null;
     const r = warped ? warped.averageRate || rate(region) : rate(region);
+    const offline = input.offline?.has(region.fileId) ?? false;
     drafts.push({
       id: region.id,
       whole: true,
@@ -141,8 +144,8 @@ export function buildScene(input: SceneInput): TracksScene {
       length: warped ? warped.lengthTicks : region.length / r,
       ...(warped ? { warp: warped.drawPoints() } : {}),
       color: colors.get(region.trackId) ?? Fallback,
-      flags: flagsOf(region.id, region.trackId, region.muted),
-      name: region.name,
+      flags: flagsOf(region.id, region.trackId, region.muted) | (offline ? ItemFlag.Offline : 0),
+      name: offline ? `${region.name} (offline)` : region.name,
       waveform: input.waveformKey(region.fileId),
       fileOffset: region.fileOffset,
       fadeIn: region.fadeIn,
@@ -337,7 +340,7 @@ function part(
     start: from,
     length: to - from,
     color,
-    flags: ItemFlag.Inner | (muted ? ItemFlag.Muted : 0),
+    flags: ItemFlag.Inner | (muted ? ItemFlag.Muted : 0) | (input.offline?.has(take.fileId) ? ItemFlag.Offline : 0),
     name: '',
     waveform: input.waveformKey(take.fileId),
     fileOffset: take.fileOffset + (from - take.startTick) * r,

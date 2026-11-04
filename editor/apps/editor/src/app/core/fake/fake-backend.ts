@@ -14,6 +14,8 @@ export function provideFakeServer(server: FakeAnodeServer = new FakeAnodeServer(
 }
 
 /** `?fake`'s providers (main.ts loads this module only then): a realtime fake Server, with the demo project or none. */
-export function fakeProviders(mode: 'demo' | 'empty'): Provider[] {
-  return provideFakeServer(new FakeAnodeServer({ realtime: true, demo: mode === 'demo' }));
+export function fakeProviders(mode: 'demo' | 'offline' | 'empty'): Provider[] {
+  return provideFakeServer(
+    new FakeAnodeServer({ realtime: true, demo: mode !== 'empty', offline: mode === 'offline' })
+  );
 }

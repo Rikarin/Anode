@@ -35,6 +35,11 @@ export class PeaksCache {
 
   /** The waveform of `fileId` at the kept level `level`, or null when the Server has none. */
   get(fileId: string, level: number): Promise<Waveform | null> {
+    // An offline file has nothing to read: asking again every frame would only fail again.
+    if (untracked(() => this.project.offline().files.some(f => f.fileId === fileId))) {
+      return Promise.resolve(null);
+    }
+
     const version = untracked(() => this.project.files().get(fileId)?.version ?? 0);
     if (this.versions.get(fileId) !== version) {
       this.forget(fileId);

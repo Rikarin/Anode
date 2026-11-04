@@ -106,6 +106,57 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  '/api/v1/projects/recoverable': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** Recent projects with autosaved edits their last save does not have. */
+    get: operations['ListRecoverableProjects'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/projects/recover': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Opens a project with its autosaved edits, closing the open one. The saved project is untouched until the next save; the edits show as unsaved. */
+    post: operations['RecoverProject'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/projects/recoverable/discard': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Stops offering a project's autosaved edits; they stay available as its newest backup. */
+    post: operations['DiscardRecovery'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   '/api/v1/project': {
     parameters: {
       query?: never;
@@ -215,6 +266,57 @@ export interface paths {
     get: operations['GetHistory'];
     put?: never;
     post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/project/offline': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** Reads the disk now: the project's offline files and unreadable tracks. */
+    get: operations['GetOffline'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/project/offline/search': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Looks through a folder of the server's disk (left out: the project's) for WAVs named as the offline files, and says of each whether its length, rate and channels match. */
+    post: operations['SearchOffline'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/project/offline/relink': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Points files of the project at WAVs on the server's disk, copied into Audio Files, as one undo step; 422, changing nothing, when one's length, rate or channels do not match the file it replaces. */
+    post: operations['RelinkFiles'];
     delete?: never;
     options?: never;
     head?: never;
@@ -2149,7 +2251,9 @@ export interface components {
      * @description An audio file of the project; `path` is relative to the project folder. `tempo` is its File Tempo
      *     (Smart Tempo), null until analysed. `version` (Phase 7) counts the Audio File Editor's operations on it: 0
      *     is the file as imported or recorded; operation N wrote `path` as `&lt;name&gt;.vN.wav` beside it, and
-     *     undo points `path` and `version` back at the previous one.
+     *     undo points `path` and `version` back at the previous one. `channels` 0 is a file the project
+     *     lost its entry for: its regions kept it, `frames` is as far as they reach, and its format is not known until
+     *     it is relinked.
      */
     AudioFile: {
       id: string;
@@ -3192,6 +3296,7 @@ export interface components {
       | components['schemas']['EditCommandSetProjectNotesCommand']
       | components['schemas']['EditCommandJoinRegionsCommand']
       | components['schemas']['EditCommandCopyRegionsCommand']
+      | components['schemas']['EditCommandPasteRegionsCommand']
       | components['schemas']['EditCommandAddInsertCommand']
       | components['schemas']['EditCommandRemoveInsertCommand']
       | components['schemas']['EditCommandMoveInsertCommand']
@@ -4059,6 +4164,22 @@ export interface components {
       name?: null | string;
     };
     /**
+     * @description Puts regions of any kind on the timeline from the editor's clipboard (⌘V): whole regions as the project returned
+     *     them, each with the `trackId` and `startTick` it lands on (a take folder's takes and comp moved with
+     *     it). A cut has deleted them, so they need name nothing in the project: everything is checked as new, and every
+     *     copy gets ids of its own. Files are the project's, so a region of another project is refused. Track automation
+     *     goes in the same batch, as `setAutomation`.
+     */
+    EditCommandPasteRegionsCommand: {
+      /** @enum {string} */
+      type: 'pasteRegions';
+      regions?: null | components['schemas']['AudioRegion'][];
+      midiRegions?: null | components['schemas']['MidiRegion'][];
+      takeFolders?: null | components['schemas']['TakeFolder'][];
+      patternRegions?: null | components['schemas']['PatternRegion'][];
+      sessionPlayerRegions?: null | components['schemas']['SessionPlayerRegion'][];
+    };
+    /**
      * @description Quantises audio regions: flex markers on their transients (analysed now if need be) move toward the grid of
      *     `gridTicks` by `strength` (0…1), with `swing` (0…1) delaying every second grid step. Turns flex
      *     on for their tracks when it is off. Phase 7: `grooveId` and a matching groove track as for
@@ -4371,6 +4492,10 @@ export interface components {
       frames?: null | number;
       /** Format: int32 */
       sampleRate?: null | number;
+      /** Format: int32 */
+      channels?: null | number;
+      /** Format: int32 */
+      bitDepth?: null | number;
     };
     /**
      * @description Replaces an audio region's flex markers: file frames inside the region, their ticks increasing with them and
@@ -5168,18 +5293,38 @@ export interface components {
       type: 'unfreezeTrack';
       trackId: string;
     };
+    /**
+     * @description The stream the engine host has open, as the device settled on it (it may differ from what was asked for). The
+     *     latencies are in frames, as the driver reports them for the open stream with the buffer included; 0 on the null
+     *     backend, which has no device, and for inputs when none are open.
+     */
+    EngineAudio: {
+      /** Format: int32 */
+      sampleRate: number;
+      /** Format: int32 */
+      bufferFrames: number;
+      /** Format: int32 */
+      inputChannels: number;
+      /** Format: int32 */
+      outputChannels: number;
+      /** Format: int32 */
+      inputLatencyFrames: number;
+      /** Format: int32 */
+      outputLatencyFrames: number;
+    };
     /** @enum {unknown} */
     EngineState: 'disconnected' | 'connected' | 'inprocess';
     /**
      * @description The server's link to the engine host: whether it is reachable (`state`), the host's version and audio
      *     backend (`coreaudio`, `wasapi`, `alsa`, `null`) from its hello while connected, and why the
-     *     link is down when it is (`message`).
+     *     link is down when it is (`message`). `audio` is the device the host runs while connected, else null.
      */
     EngineStatus: {
       state: components['schemas']['EngineState'];
       hostVersion?: null | string;
       backend?: null | string;
       message?: null | string;
+      audio: null | components['schemas']['EngineAudio'];
     };
     /**
      * @description A cable from outlet `outlet` of an object to inlet `inlet` of another (0-based, as the kind lists
@@ -6270,6 +6415,49 @@ export interface components {
       /** Format: double */
       size: number;
     };
+    /**
+     * @description A WAV with the name of an offline file. `problem` is null when its length, rate and channels match, so it
+     *     can be relinked; otherwise it says what differs.
+     */
+    OfflineCandidate: {
+      fileId: string;
+      path: string;
+      problem?: null | string;
+    };
+    /**
+     * @description A file of the project the disk cannot give. Its regions stay, play silence (a `changed` file plays what is
+     *     there) and save as they are. `detail` says what is wrong with a `changed` file.
+     */
+    OfflineFile: {
+      fileId: string;
+      name: string;
+      path: string;
+      reason: components['schemas']['OfflineReason'];
+      detail?: null | string;
+    };
+    /**
+     * @description Why a file of the project is offline.
+     * @enum {unknown}
+     */
+    OfflineReason: 'missing' | 'changed' | 'unlisted';
+    /**
+     * @description What the project could not find when last checked: its offline files, and the tracks whose
+     *     `tracks/&lt;id&gt;.json` is missing or unreadable (they are not in the project, and saving keeps their files).
+     */
+    OfflineReport: {
+      files: components['schemas']['OfflineFile'][];
+      unreadableTracks: string[];
+    };
+    /** @description What a search found, those that match first; `truncated`: it stopped before seeing the whole folder. */
+    OfflineSearch: {
+      directory: string;
+      candidates: components['schemas']['OfflineCandidate'][];
+      truncated: boolean;
+    };
+    /** @description Searches a folder of the server's disk and those inside it (left out: the project's own). */
+    OfflineSearchRequest: {
+      directory?: null | string;
+    };
     OpenProjectRequest: {
       path: string;
     };
@@ -6591,6 +6779,7 @@ export interface components {
      *     is its movie (null: none). Phase 11 (docs/12-phase-11.md): `chordTrack` is its chord track (chords, key and
      *     scale changes), `sessionPlayerRegions` the Session Player regions of its Drummer, Bass Player and Keyboard
      *     Player tracks, and `environment` its MIDI Environment (empty: physical input to sequencer input).
+     *     `offline` is what the disk lacks of it (not stored; the `offlineChanged` event follows it).
      */
     Project: {
       id: string;
@@ -6623,6 +6812,7 @@ export interface components {
       chordTrack: components['schemas']['ChordTrack'];
       sessionPlayerRegions: components['schemas']['SessionPlayerRegion'][];
       environment: components['schemas']['MidiEnvironment'];
+      offline: components['schemas']['OfflineReport'];
     };
     /** @description A saved alternative of the open project (Logic's project alternatives); one is current. */
     ProjectAlternative: {
@@ -6718,6 +6908,17 @@ export interface components {
       /** Format: int64 */
       punchOutTick: number;
     };
+    /**
+     * @description A project whose edits since its last save survive in an autosave, offered after a crash (docs/04-phase-3.md,
+     *     "Autosave and crash recovery"). `autosaved` is when they were last written.
+     */
+    RecoverableProject: {
+      id: string;
+      name: string;
+      path: string;
+      /** Format: date-time */
+      autosaved: string;
+    };
     /** @description Regenerate (`POST /project/regions/{id}/session-player/regenerate`): a new seed (left out: drawn). */
     RegenerateRequest: {
       /** Format: int64 */
@@ -6767,6 +6968,15 @@ export interface components {
       /** Format: double */
       swing: number;
       grooveId?: null | string;
+    };
+    /** @description Relinks files, as one undo step. */
+    RelinkRequest: {
+      files: components['schemas']['RelinkTarget'][];
+    };
+    /** @description Points a file of the project at a WAV on the server's disk. */
+    RelinkTarget: {
+      fileId: string;
+      path: string;
     };
     /**
      * @description The remote's key-command pad sets (`GET/PUT /remote/pads`), in the user settings; ids unique across sets
@@ -8044,6 +8254,113 @@ export interface operations {
       };
     };
   };
+  ListRecoverableProjects: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['RecoverableProject'][];
+        };
+      };
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails'];
+        };
+      };
+    };
+  };
+  RecoverProject: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['OpenProjectRequest'];
+      };
+    };
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Project'];
+        };
+      };
+      /** @description Not Found */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails'];
+        };
+      };
+    };
+  };
+  DiscardRecovery: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['OpenProjectRequest'];
+      };
+    };
+    responses: {
+      /** @description No Content */
+      204: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Not Found */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails'];
+        };
+      };
+    };
+  };
   GetProject: {
     parameters: {
       query?: never;
@@ -8278,6 +8595,122 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['UndoHistory'];
+        };
+      };
+      /** @description Not Found */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails'];
+        };
+      };
+    };
+  };
+  GetOffline: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['OfflineReport'];
+        };
+      };
+      /** @description Not Found */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails'];
+        };
+      };
+    };
+  };
+  SearchOffline: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['OfflineSearchRequest'];
+      };
+    };
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['OfflineSearch'];
+        };
+      };
+      /** @description Not Found */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/problem+json': components['schemas']['ProblemDetails'];
+        };
+      };
+    };
+  };
+  RelinkFiles: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['RelinkRequest'];
+      };
+    };
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['CommandResult'];
         };
       };
       /** @description Not Found */

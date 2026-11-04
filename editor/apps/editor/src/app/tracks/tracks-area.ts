@@ -55,6 +55,7 @@ import { JobsStore } from '../state/jobs.store';
 import { KeyCommandsStore } from '../state/key-commands.store';
 import { LanesStore } from '../state/lanes.store';
 import { ProjectStore } from '../state/project.store';
+import { RegionClipboardStore } from '../state/region-clipboard.store';
 import { SelectionStore } from '../state/selection.store';
 import { SessionPlayersStore } from '../state/session-players.store';
 import { type GlobalLane, Tools, TracksViewStore, visibleGlobalLanes } from '../state/tracks-view.store';
@@ -68,7 +69,7 @@ import { plural } from './region-edit';
 import { SnapModes } from './snap';
 import { TakeHeader } from './take-header';
 import { Timeline } from './timeline';
-import { marqueeDeleteCommands, muteCommands } from './tool-edits';
+import { muteCommands } from './tool-edits';
 import { TrackHeader } from './track-header';
 
 /**
@@ -517,6 +518,22 @@ const Players: readonly { player: SessionPlayerKind; label: string; icon: string
         }
         @case ('regions') {
           <xui-menu>
+            <button xuiMenuItem type="button" data-testid="cut-regions" (click)="clipboard.cut()">
+              Cut ({{ keyOf('edit.cut') }})
+            </button>
+            <button xuiMenuItem type="button" data-testid="copy-regions" (click)="clipboard.copy()">
+              Copy ({{ keyOf('edit.copy') }})
+            </button>
+            <button
+              xuiMenuItem
+              type="button"
+              data-testid="paste-regions"
+              [disabled]="!clipboard.canPaste()"
+              (click)="clipboard.paste()"
+            >
+              Paste ({{ keyOf('edit.paste') }})
+            </button>
+            <xui-menu-divider />
             <button xuiMenuItem type="button" [disabled]="!packable()" data-testid="pack-folder" (click)="pack()">
               Pack Take Folder ({{ keyOf('region.pack') }})
             </button>
@@ -641,6 +658,7 @@ export class TracksArea {
   protected readonly lanes = inject(LanesStore);
   protected readonly audioImport = inject(AudioImport);
   private readonly selection = inject(SelectionStore);
+  protected readonly clipboard = inject(RegionClipboardStore);
   private readonly transport = inject(TransportStore);
   private readonly keys = inject(KeyCommandsStore);
   protected readonly desktop = inject(ConnectionService).desktop;
@@ -781,10 +799,20 @@ export class TracksArea {
       ['automation.touch', () => this.setMode('touch')],
       ['automation.latch', () => this.setMode('latch')],
       ['automation.write', () => this.setMode('write')],
+      ['edit.cut', () => this.clipboardKey(() => this.clipboard.cut())],
+      ['edit.copy', () => this.clipboardKey(() => this.clipboard.copy())],
+      ['edit.paste', () => this.clipboardKey(() => this.clipboard.paste())],
       ['edit.delete', () => this.deleteSelected()]
     ];
     const unregister = register.map(([id, action]) => this.keys.register(id, action));
     inject(DestroyRef).onDestroy(() => unregister.forEach(off => off()));
+  }
+
+  /** ⌘X, ⌘C and ⌘V are the regions' unless an editor has the focus: there they would mean its notes, not the regions. */
+  private clipboardKey(action: () => unknown): void {
+    if (!document.activeElement?.closest('an-editors-pane')) {
+      void action();
+    }
   }
 
   /** Quantises the selected audio regions at the Region inspector's grid (Q). */
@@ -1034,26 +1062,7 @@ export class TracksArea {
     }
     const range = this.view.marquee();
     if (range) {
-      const tracks = new Set(
-        this.lanes
-          .rows()
-          .slice(range.laneFrom, range.laneTo + 1)
-          .filter(row => row.kind === 'track')
-          .map(row => row.track.id)
-      );
-      const spans = this.timeline()
-        .allSpans()
-        .filter(s => tracks.has(s.trackId));
-      const tempo = this.project.tempoMap();
-      const rate = this.project.info()?.sampleRate ?? 48_000;
-      const commands = marqueeDeleteCommands(range.startTick, range.endTick, spans, {
-        regions: this.project.regions(),
-        midiRegions: this.project.midiRegions(),
-        takeFolders: this.project.takeFolders(),
-        endOf: r => this.project.regionEnd(r),
-        frames: (from, to) => Math.round(tempo.framesBetween(from, to - from, rate)),
-        fileFrames: fileId => this.project.files().get(fileId)?.frames ?? 0
-      });
+      const commands = this.clipboard.marqueeDelete(range);
       this.view.marquee.set(null);
       void this.project.execute(commands, 'Delete Marquee Selection');
       return;

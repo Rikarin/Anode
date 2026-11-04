@@ -46,6 +46,9 @@ describe('key commands', () => {
     expect(resolveKey(index, key('KeyR', 'R', { shiftKey: true }), true)).toBe('transport.flashback');
     expect(resolveKey(index, key('Digit2', '2'), true)).toBe('screenset.recall2');
     expect(resolveKey(index, key('Backspace', 'Backspace'), true)).toBe('edit.delete');
+    expect(resolveKey(index, key('KeyX', 'x', { metaKey: true }), true)).toBe('edit.cut');
+    expect(resolveKey(index, key('KeyC', 'c', { metaKey: true }), true)).toBe('edit.copy');
+    expect(resolveKey(index, key('KeyV', 'v', { metaKey: true }), true)).toBe('edit.paste');
     expect(resolveKey(index, key('KeyQ', 'q'), true)).toBe('region.quantizeAudio');
     expect(resolveKey(index, key('KeyO', 'o'), true)).toBe('view.loopBrowser');
     expect(resolveKey(index, key('KeyB', 'b'), true)).toBe('view.smartControls');

@@ -28,26 +28,61 @@ public sealed class AudioImport(ProjectSession session) {
     /// </summary>
     public (long Session, string Path, WavInfo Info) Bring(string path, int maxChannels) {
         var (sessionId, folder, rate) = session.Target();
+        var source = Source(path);
+        var info = Check(source, rate, maxChannels);
+        return (sessionId, Copied(source, folder), info);
+    }
+
+    /// <summary>
+    ///     Relinks files of the project, one undo step: each candidate must hold what its file held
+    ///     (<see cref="OfflineFiles.Mismatch" />, whatever it is called), and is then copied into <c>Audio Files</c>, which
+    ///     is where a project's files live. Nothing is copied or changed unless every candidate passes.
+    /// </summary>
+    public CommandResult Relink(RelinkRequest request) {
+        if (request.Files is not { Count: > 0 } targets) {
+            throw ProjectException.Unprocessable("Name the files to relink.");
+        }
+
+        var checkedTargets = new List<(long Session, string Folder, AudioFile File, string Source, WavInfo Info)>();
+        foreach (var target in targets.DistinctBy(static t => t.FileId)) {
+            var (sessionId, folder, file) = session.RelinkTarget(target.FileId);
+            var source = Source(target.Path);
+            var info = Probe(source);
+            if (OfflineFiles.Mismatch(file, info) is { } problem) {
+                throw ProjectException.Unprocessable($"'{Path.GetFileName(source)}' is not '{file.Name}': {problem}");
+            }
+
+            checkedTargets.Add((sessionId, folder, file, source, info));
+        }
+
+        return session.Relink(
+            checkedTargets[0].Session,
+            [..checkedTargets.Select(static t => (t.File, Copied(t.Source, t.Folder), t.Info))]
+        );
+    }
+
+    /// <summary>Where a file named by a client is; 422 when nothing is there.</summary>
+    static string Source(string? path) {
         if (string.IsNullOrWhiteSpace(path)) {
-            throw ProjectException.Unprocessable("Name the file to import.");
+            throw ProjectException.Unprocessable("Name the file.");
         }
 
         var source = Path.GetFullPath(path);
-        if (!File.Exists(source)) {
-            throw ProjectException.Unprocessable($"'{source}' does not exist.");
-        }
+        return File.Exists(source) ? source : throw ProjectException.Unprocessable($"'{source}' does not exist.");
+    }
 
-        var info = Check(source, rate, maxChannels);
+    /// <summary>A file's place in the project's <c>Audio Files</c>: where it is, when it is there, else a copy of it.</summary>
+    static string Copied(string source, string folder) {
         var audio = Path.Combine(folder, ProjectPackage.AudioFolder);
         Directory.CreateDirectory(audio);
         if (string.Equals(Path.GetDirectoryName(source), Path.GetFullPath(audio), StringComparison.Ordinal)) {
-            return (sessionId, source, info);
+            return source;
         }
 
         var temporary = Path.Combine(audio, $".import-{Guid.NewGuid():n}.tmp");
         try {
             File.Copy(source, temporary);
-            return (sessionId, Claim(temporary, audio, Path.GetFileNameWithoutExtension(source)), info);
+            return Claim(temporary, audio, Path.GetFileNameWithoutExtension(source));
         } finally {
             File.Delete(temporary);
         }
@@ -73,16 +108,18 @@ public sealed class AudioImport(ProjectSession session) {
         }
     }
 
-    static WavInfo Check(string path, int projectRate, int maxChannels) {
-        WavInfo info;
+    static WavInfo Probe(string path) {
         try {
-            info = WavReader.Probe(path);
+            return WavReader.Probe(path);
         } catch (WavFormatException e) {
             throw ProjectException.Unprocessable(e.Message);
         } catch (Exception e) when (e is IOException or UnauthorizedAccessException) {
             throw ProjectException.Unprocessable($"Could not read '{path}': {e.Message}");
         }
+    }
 
+    static WavInfo Check(string path, int projectRate, int maxChannels) {
+        var info = Probe(path);
         if (info.Channels < 1 || info.Channels > maxChannels) {
             throw ProjectException.Unprocessable(
                 maxChannels == 2

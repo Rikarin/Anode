@@ -32,6 +32,12 @@ public sealed record ProjectState(
 
     public long LastEventId { get; init; }
 
+    /// <summary>
+    ///     Tracks <c>project.json</c> lists whose track file is missing or unreadable: not in the project, but kept in
+    ///     the package by saving, so that a damaged file can still be repaired and a missing one put back.
+    /// </summary>
+    public ImmutableList<string> UnreadableTracks { get; init; } = [];
+
     /// <summary>The take folders, by id (docs/04-phase-3.md, "Take folders").</summary>
     public ImmutableSortedDictionary<string, TakeFolder> TakeFolders { get; init; } =
         ById<TakeFolder>();
@@ -246,7 +252,7 @@ public sealed record ProjectState(
             );
 
     /// <summary>The contract form, as <c>GET /api/v1/project</c> answers it.</summary>
-    public Project ToProject(string path, long revision, bool dirty) =>
+    public Project ToProject(string path, long revision, bool dirty, OfflineReport? offline = null) =>
         new(
             Id,
             Name,
@@ -275,7 +281,8 @@ public sealed record ProjectState(
             Movie,
             ChordTrack,
             [..SessionPlayerRegions.Values],
-            Environment
+            Environment,
+            offline ?? new([], [..UnreadableTracks])
         );
 
     /// <summary>Applies one delta operation (an edit's primitive step, also what clients apply).</summary>

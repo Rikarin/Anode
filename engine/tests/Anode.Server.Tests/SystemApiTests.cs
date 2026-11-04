@@ -1,4 +1,5 @@
 using Anode.Contracts;
+using Anode.Server.Engine;
 using System.Net;
 using System.Net.WebSockets;
 using System.Text;
@@ -17,6 +18,33 @@ public sealed class SystemApiTests {
         );
         var system = await server.SystemAsync(client);
         Assert.False(string.IsNullOrEmpty(system.Version));
+    }
+
+    [Fact]
+    public async Task Reports_the_stream_the_host_has_open_with_its_latency() {
+        await using var server = new ServerFixture();
+        using var client = server.CreateClient();
+        await ServerFixture.Eventually(async () =>
+            (await server.SystemAsync(client)).Engine.State == EngineState.InProcess
+        );
+
+        Assert.Equal(
+            new EngineAudio(
+                48_000,
+                FakeHost.BufferFrames,
+                2,
+                2,
+                FakeHost.InputLatencyFrames,
+                FakeHost.OutputLatencyFrames
+            ),
+            (await server.SystemAsync(client)).Engine.Audio
+        );
+
+        // A rate mismatch rewrites the status's message: the stream it reports stays.
+        await client.CreateProjectAsync("Other", 44_100);
+        await ServerFixture.Eventually(async () =>
+            (await server.SystemAsync(client)).Engine is { Message: not null, Audio.SampleRate: 48_000 }
+        );
     }
 
     [Fact]

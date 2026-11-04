@@ -23,6 +23,7 @@ import {
   type MidiRegion,
   type MixerGroup,
   type Movie,
+  type OfflineReport,
   type PatternRegion,
   type Project,
   type ProjectDelta,
@@ -52,6 +53,8 @@ export interface ProjectInfo {
   path: string;
   sampleRate: number;
 }
+
+const NothingOffline: OfflineReport = { files: [], unreadableTracks: [] };
 
 export const DefaultSettings: ProjectSettings = {
   tempo: 120,
@@ -122,6 +125,8 @@ export class ProjectStore {
   readonly info = signal<ProjectInfo | null>(null);
   readonly revision = signal(0);
   readonly dirty = signal(false);
+  /** When the Server last autosaved the unsaved edits (ISO 8601), or null. */
+  readonly autosaved = signal<string | null>(null);
   readonly settings = signal<ProjectSettings>(DefaultSettings);
   readonly master = signal<ChannelStrip>(SilentStrip);
   readonly trackIds = signal<readonly string[]>([]);
@@ -130,6 +135,10 @@ export class ProjectStore {
   /** MIDI regions (`mid_…`), with their notes and controller events. */
   readonly midiRegions = signal<ReadonlyMap<string, MidiRegion>>(new Map());
   readonly files = signal<ReadonlyMap<string, AudioFile>>(new Map());
+  /** What the disk lacks of the project: not stored, it comes with the project and `offlineChanged`. */
+  readonly offline = signal<OfflineReport>(NothingOffline);
+  /** The ids of the offline files. */
+  readonly offlineIds = computed<ReadonlySet<string>>(() => new Set(this.offline().files.map(f => f.fileId)));
   /** Take folders (`tkf_…`) by id: takes of cycle recordings, or packed regions, and their comps. */
   readonly takeFolders = signal<ReadonlyMap<string, TakeFolder>>(new Map());
   /** Markers (the marker track and the Marker List), in time order. */
@@ -214,17 +223,33 @@ export class ProjectStore {
         case 'projectClosed':
           this.clear();
           break;
+        case 'offlineChanged':
+          this.offline.set(message.offline);
+          break;
         case 'projectSaved':
           if (message.project.id === this.info()?.id && message.revision === this.revision()) {
             this.dirty.set(false);
           }
           this.info.update(info => (info?.id === message.project.id ? { ...info, path: message.project.path } : info));
           break;
+        case 'projectAutosaved':
+          this.autosaved.set(message.autosaved);
+          break;
+        case 'autosaveFailed':
+          this.notify.error(message.message);
+          break;
         default:
           break;
       }
     });
     inject(DestroyRef).onDestroy(() => this.clearGap());
+  }
+
+  /** How many audio regions, of the arrangement and in take folders, a file plays in. */
+  regionsOfFile(fileId: string): number {
+    const regions = [...this.regions().values()].filter(r => r.fileId === fileId).length;
+    const takes = [...this.takeFolders().values()].flatMap(f => f.takes).filter(t => t.fileId === fileId).length;
+    return regions + takes;
   }
 
   /** Replaces everything with a snapshot from the Server. */
@@ -234,6 +259,7 @@ export class ProjectStore {
     this.info.set({ id: project.id, name: project.name, path: project.path, sampleRate: project.sampleRate });
     this.revision.set(project.revision);
     this.dirty.set(project.dirty);
+    this.autosaved.set(null);
     this.settings.set(project.settings);
     this.master.set(project.master);
     this.trackIds.set(project.tracks.map(t => t.id));
@@ -241,6 +267,7 @@ export class ProjectStore {
     this.regions.set(new Map(project.regions.map(r => [r.id, r])));
     this.midiRegions.set(new Map(project.midiRegions.map(r => [r.id, r])));
     this.files.set(new Map(project.audioFiles.map(f => [f.id, f])));
+    this.offline.set(project.offline);
     this.takeFolders.set(new Map(project.takeFolders.map(f => [f.id, f])));
     this.markers.set(byTick(project.markers));
     this.sections.set(byStart(project.arrangement));
@@ -267,12 +294,14 @@ export class ProjectStore {
     this.info.set(null);
     this.revision.set(0);
     this.dirty.set(false);
+    this.autosaved.set(null);
     this.settings.set(DefaultSettings);
     this.master.set(SilentStrip);
     this.trackIds.set([]);
     this.tracks.set(new Map());
     this.regions.set(new Map());
     this.midiRegions.set(new Map());
+    this.offline.set(NothingOffline);
     this.files.set(new Map());
     this.takeFolders.set(new Map());
     this.markers.set([]);

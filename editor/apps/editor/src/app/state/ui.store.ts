@@ -58,6 +58,8 @@ function same(a: PluginWindow, b: PluginWindow): boolean {
 export class UiStore {
   readonly keyCommandsOpen = signal(false);
   readonly saveAlternativeOpen = signal(false);
+  /** The Missing Files window: it opens with a project that lacks files. */
+  readonly missingFilesOpen = signal(false);
   readonly bounceOpen = signal(false);
   readonly ioLabelsOpen = signal(false);
   /** The group whose settings show, or null when the window is closed. */

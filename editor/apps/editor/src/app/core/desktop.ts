@@ -10,11 +10,19 @@ export interface AudioDevice {
 }
 
 export interface AudioSettings {
-  /** Device uid, or null to run without audio (the null backend). */
+  /** Output device uid, '' for the system's default output, or null to run without audio (the null backend). */
   device: string | null;
+  /** Input device uid, '' for no inputs, or null for the output device's own (or the system's default input). */
+  inputDevice: string | null;
   sampleRate: number;
   bufferFrames: number;
 }
+
+/**
+ * How a switch of audio device ended. A failed one is not saved; `restored` says the engine runs on the previous
+ * settings again, false only when those would not start either.
+ */
+export type AudioApplied = { applied: true } | { applied: false; error: string; restored: boolean };
 
 /** Which Server the desktop app talks to: its own sidecars, or a remote one. */
 export type ServerTarget = { mode: 'local' } | { mode: 'remote'; baseUrl: string; token: string };
@@ -49,6 +57,7 @@ export type AppCommand =
   | 'importAudio'
   | 'importMidi'
   | 'saveAlternative'
+  | 'missingFiles'
   | 'keyCommands'
   | 'bounce'
   | 'ioLabels'
@@ -150,10 +159,12 @@ export interface AnodeDesktop {
   audio: {
     devices(): Promise<{ backend: string; devices: AudioDevice[] }>;
     settings(): Promise<AudioSettings>;
-    /** Restarts the engine host with these settings. */
-    apply(settings: AudioSettings): Promise<void>;
+    /** Restarts the engine host with these settings, and resolves once it runs on them or is back on the old ones. */
+    apply(settings: AudioSettings): Promise<AudioApplied>;
   };
 }
+
+export type AudioBridge = AnodeDesktop['audio'];
 
 declare global {
   interface Window {

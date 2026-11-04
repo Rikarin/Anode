@@ -209,6 +209,7 @@ public static class UndoLabels {
                     SetProjectNotesCommand => "Change Project Notes",
                     JoinRegionsCommand => "Join Regions",
                     CopyRegionsCommand => "Copy Regions",
+                    PasteRegionsCommand => "Paste Regions",
                     AddInsertCommand { Chain: InsertChain.MidiEffects } => "Add MIDI FX",
                     RemoveInsertCommand { Chain: InsertChain.MidiEffects } => "Remove MIDI FX",
                     MoveInsertCommand { Chain: InsertChain.MidiEffects } => "Move MIDI FX",

@@ -36,7 +36,8 @@ int PrintVersion() {
 int ListDevices() {
     var devices = NativeAudio.IsAvailable ? NativeAudio.Devices() : [];
     if (options.Flag("json")) {
-        Console.WriteLine(JsonSerializer.Serialize(devices, HostJsonContext.Default.IReadOnlyListAudioDeviceInfo));
+        var backend = NativeAudio.IsLibraryPresent ? NativeAudio.Backend : "none";
+        Console.WriteLine(JsonSerializer.Serialize(new(backend, devices), HostJsonContext.Default.AudioDeviceList));
         return 0;
     }
 
@@ -60,7 +61,8 @@ int Usage() {
                    [--midi-port-prefix anode]
                    [--data-dir <dir>] [--plugin-sandbox <path>] [--sandbox-mode grouped|instance|in-host]
                                            run the engine for anode-server until SIGINT or SIGTERM
-                                           (--device: a device uid from --devices, default the system output;
+                                           (--device: a device uid from --devices, default the system output,
+                                           or <output uid>|<input uid> to pair an input device with it;
                                            --inputs: device inputs to open, default all (16 on --null-audio);
                                            --input-tone: the null device's inputs carry a 440 Hz tone;
                                            --lose-device-after: the null device reports itself lost (tests);

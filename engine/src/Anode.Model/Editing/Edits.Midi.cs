@@ -197,6 +197,20 @@ public static partial class Edits {
             throw new EditException($"No groove template '{groove}'.");
         }
 
+        CheckPlayback(playback);
+        return [
+            new MidiRegionUpserted(
+                region with {
+                    Name = c.Name is null ? region.Name : Name(c.Name, "region name"),
+                    Playback = playback,
+                    Muted = c.Muted ?? region.Muted
+                }
+            )
+        ];
+    }
+
+    /// <summary>A region's playback parameters in their ranges.</summary>
+    static void CheckPlayback(RegionPlayback playback) {
         if (playback.Transpose is < -MaxTranspose or > MaxTranspose) {
             throw new EditException($"Transpose {playback.Transpose} is outside ±{MaxTranspose} semitones.");
         }
@@ -211,15 +225,6 @@ public static partial class Edits {
 
         CheckUnit(playback.QuantizeStrength, "quantise strength");
         CheckUnit(playback.Swing, "swing");
-        return [
-            new MidiRegionUpserted(
-                region with {
-                    Name = c.Name is null ? region.Name : Name(c.Name, "region name"),
-                    Playback = playback,
-                    Muted = c.Muted ?? region.Muted
-                }
-            )
-        ];
     }
 
     /// <summary>A region's items in a list with room for what a command adds, once that is checked.</summary>

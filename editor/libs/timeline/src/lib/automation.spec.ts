@@ -7,12 +7,14 @@ import {
   hitPoint,
   hitSegment,
   insertPoint,
+  laySpan,
   movePoints,
   pointsInRange,
   removePoints,
   replaceSpan,
   setCurve,
-  simplify
+  simplify,
+  sliceRange
 } from './automation';
 
 const p = (tick: number, value: number, curve = 0): AutomationPoint => ({ tick, value, curve });
@@ -155,6 +157,41 @@ describe('editing', () => {
   it('lists the points in a range either way round', () => {
     expect(pointsInRange(lane, 50, 200)).toEqual([1, 2]);
     expect(pointsInRange(lane, 200, 50)).toEqual([1, 2]);
+  });
+});
+
+describe('sliceRange', () => {
+  it('takes the points in the range between its edge values', () => {
+    expect(sliceRange([p(0, 0), p(100, 1), p(200, 0)], 50, 150)).toEqual([p(50, 0.5), p(100, 1), p(150, 0.5)]);
+  });
+
+  it('adds no edge point where a point already is, and leaves the end to the next stretch', () => {
+    expect(sliceRange([p(0, 0), p(100, 1), p(200, 0)], 100, 200)).toEqual([p(100, 1), p(200, 0)]);
+  });
+
+  it('is empty for a lane with no point in the range', () => {
+    expect(sliceRange([p(0, 0), p(300, 1)], 100, 200)).toEqual([]);
+    expect(sliceRange([], 100, 200)).toEqual([]);
+  });
+});
+
+describe('laySpan', () => {
+  it('replaces the span and keeps the values just outside it', () => {
+    const laid = laySpan([p(0, 0), p(100, 1), p(200, 0)], [p(50, 0.25), p(150, 0.75)]);
+    expect(laid).toEqual([p(0, 0), p(50, 0.5), p(50, 0.25), p(150, 0.75), p(150, 0.5), p(200, 0)]);
+  });
+
+  it('lays a stretch on an empty lane as it is', () => {
+    expect(laySpan([], [p(50, 1), p(60, 0)])).toEqual([p(50, 1), p(60, 0)]);
+  });
+
+  it('keeps at most two points on a tick', () => {
+    const laid = laySpan([p(0, 0), p(100, 1), p(200, 0)], [p(100, 0.25), p(100, 0.75)]);
+    expect(laid.filter(q => q.tick === 100).length).toBeLessThanOrEqual(2);
+  });
+
+  it('leaves the lane alone for nothing', () => {
+    expect(laySpan([p(0, 0)], [])).toEqual([p(0, 0)]);
   });
 });
 

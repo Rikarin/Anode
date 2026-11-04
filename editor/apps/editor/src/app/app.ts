@@ -1,4 +1,13 @@
-import { ChangeDetectionStrategy, Component, Injector, computed, inject, signal } from '@angular/core';
+import {
+  ChangeDetectionStrategy,
+  Component,
+  Injector,
+  computed,
+  effect,
+  inject,
+  signal,
+  untracked
+} from '@angular/core';
 import { NavigationEnd, Router, RouterOutlet } from '@angular/router';
 import { XuiButtonImports } from '@xui/button';
 import { XuiInputImports } from '@xui/input';
@@ -33,6 +42,7 @@ import { ScoreWindow } from './score/score-window';
 import { StaffStylesWindow } from './score/staff-styles-window';
 import { ScriptEditor } from './scripter/script-editor';
 import { ControlBar } from './shell/control-bar';
+import { MissingFilesDialog } from './shell/missing-files';
 import { SaveAlternativeDialog } from './shell/save-alternative';
 import { HistoryStore } from './state/history.store';
 import { KeyCommandsStore } from './state/key-commands.store';
@@ -88,6 +98,7 @@ const InterchangeCommands = {
     PluginWindowsHost,
     ProcessingDialog,
     RouterOutlet,
+    MissingFilesDialog,
     SaveAlternativeDialog,
     ScriptEditor,
     SoundLibraryDialog,
@@ -184,6 +195,11 @@ const InterchangeCommands = {
             }
           }
           @if (project.isOpen()) {
+            @if (ui.missingFilesOpen()) {
+              @defer (on immediate) {
+                <an-missing-files />
+              }
+            }
             @if (ui.bounceOpen()) {
               @defer (on immediate) {
                 <an-bounce-dialog />
@@ -382,9 +398,21 @@ export class App {
   constructor() {
     window.anode?.onFullScreen(fullScreen => this.fullScreen.set(fullScreen));
     // The desktop app asks before it quits: the open project lives in its own Server and goes with it.
-    window.anode?.onQuit?.(() => this.session.mayDiscard('quit'));
+    window.anode?.onQuit?.(() => this.session.mayQuit());
     window.anode?.onCommand?.(command => void this.command(command));
     window.anode?.onOpenSettings?.(() => this.ui.settingsOpen.set(true));
+    // A project found open at start lacks files as much as one opened here (ProjectSession tells those).
+    let shown: string | undefined;
+    effect(() => {
+      const id = this.project.info()?.id;
+      if (id !== shown) {
+        shown = id;
+        const offline = untracked(this.project.offline);
+        if (offline.files.length + offline.unreadableTracks.length > 0) {
+          this.ui.missingFilesOpen.set(true);
+        }
+      }
+    });
     inject(Router).events.subscribe(event => {
       if (event instanceof NavigationEnd) {
         this.remote.set(isRemoteRoute(event.urlAfterRedirects));
@@ -504,6 +532,11 @@ export class App {
         break;
       case 'saveAlternative':
         this.ui.saveAlternativeOpen.set(true);
+        break;
+      case 'missingFiles':
+        if (this.project.isOpen()) {
+          this.ui.missingFilesOpen.set(true);
+        }
         break;
       case 'bounce':
         if (this.project.isOpen()) {
@@ -685,6 +718,10 @@ export class App {
     }
 
     const id = this.keys.resolve(event);
+    // Text selected on the page keeps the system's Copy.
+    if (id === 'edit.copy' && window.getSelection()?.isCollapsed === false) {
+      return;
+    }
     const pressKey = event.key === ' ' || event.key === 'Enter';
     // Space and Return on a focused button press it; the shortcuts are for the rest of the window.
     if (id && !(pressKey && !modified && target?.closest('button, [role="slider"], [role="radio"]'))) {

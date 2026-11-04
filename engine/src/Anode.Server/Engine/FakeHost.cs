@@ -37,6 +37,16 @@ namespace Anode.Server.Engine;
 /// </summary>
 public sealed partial class FakeHost : IAsyncDisposable {
     public const string Backend = "null";
+
+    /// <summary>The device's buffer, as its hello says.</summary>
+    public const int BufferFrames = 256;
+
+    /// <summary>The input latency its hello reports: a buffer and a converter, as a device's would be.</summary>
+    public const int InputLatencyFrames = BufferFrames + 44;
+
+    /// <summary>The output latency its hello reports.</summary>
+    public const int OutputLatencyFrames = BufferFrames + 64;
+
     const int MaxLog = 4096;
     const double TakeFrequency = 440;
     const float TakeAmplitude = 0.25f;
@@ -390,7 +400,18 @@ public sealed partial class FakeHost : IAsyncDisposable {
     IEnumerable<IpcMessage> Handle(IpcMessage message) {
         switch (message) {
             case HelloMessage:
-                yield return new HelloMessage(version, Backend, SampleRate, 256, 2, 2, TelemetryName, MasterTapName);
+                yield return new HelloMessage(
+                    version,
+                    Backend,
+                    SampleRate,
+                    BufferFrames,
+                    2,
+                    2,
+                    TelemetryName,
+                    MasterTapName,
+                    InputLatencyFrames,
+                    OutputLatencyFrames
+                );
                 yield return new PluginCatalogMessage(Catalogue);
                 yield return new MidiPortsMessage(Ports);
                 break;

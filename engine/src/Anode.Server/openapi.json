@@ -225,6 +225,121 @@
         }
       }
     },
+    "/api/v1/projects/recoverable": {
+      "get": {
+        "tags": [
+          "Projects"
+        ],
+        "summary": "Recent projects with autosaved edits their last save does not have.",
+        "operationId": "ListRecoverableProjects",
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/RecoverableProject"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/projects/recover": {
+      "post": {
+        "tags": [
+          "Projects"
+        ],
+        "summary": "Opens a project with its autosaved edits, closing the open one. The saved project is untouched until the next save; the edits show as unsaved.",
+        "operationId": "RecoverProject",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OpenProjectRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Project"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found"
+          }
+        }
+      }
+    },
+    "/api/v1/projects/recoverable/discard": {
+      "post": {
+        "tags": [
+          "Projects"
+        ],
+        "summary": "Stops offering a project\u0027s autosaved edits; they stay available as its newest backup.",
+        "operationId": "DiscardRecovery",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OpenProjectRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "204": {
+            "description": "No Content"
+          },
+          "404": {
+            "description": "Not Found"
+          }
+        }
+      }
+    },
     "/api/v1/project": {
       "get": {
         "tags": [
@@ -452,6 +567,128 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/UndoHistory"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found"
+          }
+        }
+      }
+    },
+    "/api/v1/project/offline": {
+      "get": {
+        "tags": [
+          "Project"
+        ],
+        "summary": "Reads the disk now: the project\u0027s offline files and unreadable tracks.",
+        "operationId": "GetOffline",
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OfflineReport"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found"
+          }
+        }
+      }
+    },
+    "/api/v1/project/offline/search": {
+      "post": {
+        "tags": [
+          "Project"
+        ],
+        "summary": "Looks through a folder of the server\u0027s disk (left out: the project\u0027s) for WAVs named as the offline files, and says of each whether its length, rate and channels match.",
+        "operationId": "SearchOffline",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OfflineSearchRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OfflineSearch"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found"
+          }
+        }
+      }
+    },
+    "/api/v1/project/offline/relink": {
+      "post": {
+        "tags": [
+          "Project"
+        ],
+        "summary": "Points files of the project at WAVs on the server\u0027s disk, copied into Audio Files, as one undo step; 422, changing nothing, when one\u0027s length, rate or channels do not match the file it replaces.",
+        "operationId": "RelinkFiles",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RelinkRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommandResult"
                 }
               }
             }
@@ -5929,7 +6166,7 @@
             "format": "int32"
           }
         },
-        "description": "An audio file of the project; \u0060path\u0060 is relative to the project folder. \u0060tempo\u0060 is its File Tempo\n(Smart Tempo), null until analysed. \u0060version\u0060 (Phase 7) counts the Audio File Editor\u0027s operations on it: 0\nis the file as imported or recorded; operation N wrote \u0060path\u0060 as \u0060\u0026lt;name\u0026gt;.vN.wav\u0060 beside it, and\nundo points \u0060path\u0060 and \u0060version\u0060 back at the previous one."
+        "description": "An audio file of the project; \u0060path\u0060 is relative to the project folder. \u0060tempo\u0060 is its File Tempo\n(Smart Tempo), null until analysed. \u0060version\u0060 (Phase 7) counts the Audio File Editor\u0027s operations on it: 0\nis the file as imported or recorded; operation N wrote \u0060path\u0060 as \u0060\u0026lt;name\u0026gt;.vN.wav\u0060 beside it, and\nundo points \u0060path\u0060 and \u0060version\u0060 back at the previous one. \u0060channels\u0060 0 is a file the project\nlost its entry for: its regions kept it, \u0060frames\u0060 is as far as they reach, and its format is not known until\nit is relinked."
       },
       "AudioFormat": {
         "enum": [
@@ -8761,6 +8998,9 @@
             "$ref": "#/components/schemas/EditCommandCopyRegionsCommand"
           },
           {
+            "$ref": "#/components/schemas/EditCommandPasteRegionsCommand"
+          },
+          {
             "$ref": "#/components/schemas/EditCommandAddInsertCommand"
           },
           {
@@ -9187,6 +9427,7 @@
             "setProjectNotes": "#/components/schemas/EditCommandSetProjectNotesCommand",
             "joinRegions": "#/components/schemas/EditCommandJoinRegionsCommand",
             "copyRegions": "#/components/schemas/EditCommandCopyRegionsCommand",
+            "pasteRegions": "#/components/schemas/EditCommandPasteRegionsCommand",
             "addInsert": "#/components/schemas/EditCommandAddInsertCommand",
             "removeInsert": "#/components/schemas/EditCommandRemoveInsertCommand",
             "moveInsert": "#/components/schemas/EditCommandMoveInsertCommand",
@@ -11447,6 +11688,65 @@
         },
         "description": "Packs overlapping or adjacent audio regions of one track into a new take folder, one take each."
       },
+      "EditCommandPasteRegionsCommand": {
+        "required": [
+          "type"
+        ],
+        "properties": {
+          "type": {
+            "enum": [
+              "pasteRegions"
+            ],
+            "type": "string"
+          },
+          "regions": {
+            "type": [
+              "null",
+              "array"
+            ],
+            "items": {
+              "$ref": "#/components/schemas/AudioRegion"
+            }
+          },
+          "midiRegions": {
+            "type": [
+              "null",
+              "array"
+            ],
+            "items": {
+              "$ref": "#/components/schemas/MidiRegion"
+            }
+          },
+          "takeFolders": {
+            "type": [
+              "null",
+              "array"
+            ],
+            "items": {
+              "$ref": "#/components/schemas/TakeFolder"
+            }
+          },
+          "patternRegions": {
+            "type": [
+              "null",
+              "array"
+            ],
+            "items": {
+              "$ref": "#/components/schemas/PatternRegion"
+            }
+          },
+          "sessionPlayerRegions": {
+            "type": [
+              "null",
+              "array"
+            ],
+            "items": {
+              "$ref": "#/components/schemas/SessionPlayerRegion"
+            }
+          }
+        },
+        "description": "Puts regions of any kind on the timeline from the editor\u0027s clipboard (\u2318V): whole regions as the project returned\nthem, each with the \u0060trackId\u0060 and \u0060startTick\u0060 it lands on (a take folder\u0027s takes and comp moved with\nit). A cut has deleted them, so they need name nothing in the project: everything is checked as new, and every\ncopy gets ids of its own. Files are the project\u0027s, so a region of another project is refused. Track automation\ngoes in the same batch, as \u0060setAutomation\u0060."
+      },
       "EditCommandQuantizeAudioCommand": {
         "required": [
           "regionIds",
@@ -12376,6 +12676,20 @@
             "format": "int64"
           },
           "sampleRate": {
+            "type": [
+              "null",
+              "integer"
+            ],
+            "format": "int32"
+          },
+          "channels": {
+            "type": [
+              "null",
+              "integer"
+            ],
+            "format": "int32"
+          },
+          "bitDepth": {
             "type": [
               "null",
               "integer"
@@ -14889,6 +15203,44 @@
         },
         "description": "Plays a frozen track live again (its freeze file stays in the project\u0027s audio)."
       },
+      "EngineAudio": {
+        "required": [
+          "sampleRate",
+          "bufferFrames",
+          "inputChannels",
+          "outputChannels",
+          "inputLatencyFrames",
+          "outputLatencyFrames"
+        ],
+        "type": "object",
+        "properties": {
+          "sampleRate": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "bufferFrames": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "inputChannels": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "outputChannels": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "inputLatencyFrames": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "outputLatencyFrames": {
+            "type": "integer",
+            "format": "int32"
+          }
+        },
+        "description": "The stream the engine host has open, as the device settled on it (it may differ from what was asked for). The\nlatencies are in frames, as the driver reports them for the open stream with the buffer included; 0 on the null\nbackend, which has no device, and for inputs when none are open."
+      },
       "EngineState": {
         "enum": [
           "disconnected",
@@ -14898,7 +15250,8 @@
       },
       "EngineStatus": {
         "required": [
-          "state"
+          "state",
+          "audio"
         ],
         "type": "object",
         "properties": {
@@ -14922,9 +15275,19 @@
               "null",
               "string"
             ]
+          },
+          "audio": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/EngineAudio"
+              }
+            ]
           }
         },
-        "description": "The server\u0027s link to the engine host: whether it is reachable (\u0060state\u0060), the host\u0027s version and audio\nbackend (\u0060coreaudio\u0060, \u0060wasapi\u0060, \u0060alsa\u0060, \u0060null\u0060) from its hello while connected, and why the\nlink is down when it is (\u0060message\u0060)."
+        "description": "The server\u0027s link to the engine host: whether it is reachable (\u0060state\u0060), the host\u0027s version and audio\nbackend (\u0060coreaudio\u0060, \u0060wasapi\u0060, \u0060alsa\u0060, \u0060null\u0060) from its hello while connected, and why the\nlink is down when it is (\u0060message\u0060). \u0060audio\u0060 is the device the host runs while connected, else null."
       },
       "EnvironmentCable": {
         "required": [
@@ -17738,6 +18101,123 @@
         },
         "description": "The 3D Object Panner: an object\u0027s position, polar as ADM\u0027s (\u0060audioBlockFormat\u0060 of type Objects):\n\u0060azimuth\u0060 and \u0060elevation\u0060 in degrees, \u0060distance\u0060 0\u20261 (1: on the speakers\u0027 sphere), and\n\u0060size\u0060 0\u20261 (its spread over neighbouring speakers; ADM width, height and depth together)."
       },
+      "OfflineCandidate": {
+        "required": [
+          "fileId",
+          "path"
+        ],
+        "type": "object",
+        "properties": {
+          "fileId": {
+            "type": "string"
+          },
+          "path": {
+            "type": "string"
+          },
+          "problem": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        },
+        "description": "A WAV with the name of an offline file. \u0060problem\u0060 is null when its length, rate and channels match, so it\ncan be relinked; otherwise it says what differs."
+      },
+      "OfflineFile": {
+        "required": [
+          "fileId",
+          "name",
+          "path",
+          "reason"
+        ],
+        "type": "object",
+        "properties": {
+          "fileId": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "path": {
+            "type": "string"
+          },
+          "reason": {
+            "$ref": "#/components/schemas/OfflineReason"
+          },
+          "detail": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        },
+        "description": "A file of the project the disk cannot give. Its regions stay, play silence (a \u0060changed\u0060 file plays what is\nthere) and save as they are. \u0060detail\u0060 says what is wrong with a \u0060changed\u0060 file."
+      },
+      "OfflineReason": {
+        "enum": [
+          "missing",
+          "changed",
+          "unlisted"
+        ],
+        "description": "Why a file of the project is offline."
+      },
+      "OfflineReport": {
+        "required": [
+          "files",
+          "unreadableTracks"
+        ],
+        "type": "object",
+        "properties": {
+          "files": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/OfflineFile"
+            }
+          },
+          "unreadableTracks": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "description": "What the project could not find when last checked: its offline files, and the tracks whose\n\u0060tracks/\u0026lt;id\u0026gt;.json\u0060 is missing or unreadable (they are not in the project, and saving keeps their files)."
+      },
+      "OfflineSearch": {
+        "required": [
+          "directory",
+          "candidates",
+          "truncated"
+        ],
+        "type": "object",
+        "properties": {
+          "directory": {
+            "type": "string"
+          },
+          "candidates": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/OfflineCandidate"
+            }
+          },
+          "truncated": {
+            "type": "boolean"
+          }
+        },
+        "description": "What a search found, those that match first; \u0060truncated\u0060: it stopped before seeing the whole folder."
+      },
+      "OfflineSearchRequest": {
+        "type": "object",
+        "properties": {
+          "directory": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        },
+        "description": "Searches a folder of the server\u0027s disk and those inside it (left out: the project\u0027s own)."
+      },
       "OpenProjectRequest": {
         "required": [
           "path"
@@ -18558,7 +19038,8 @@
           "movie",
           "chordTrack",
           "sessionPlayerRegions",
-          "environment"
+          "environment",
+          "offline"
         ],
         "type": "object",
         "properties": {
@@ -18696,9 +19177,12 @@
           },
           "environment": {
             "$ref": "#/components/schemas/MidiEnvironment"
+          },
+          "offline": {
+            "$ref": "#/components/schemas/OfflineReport"
           }
         },
-        "description": "The open project (docs/01-implementation-plan.md \u00A75). Musical positions are ticks at 960 PPQ; audio offsets,\nlengths and fades are frames at the project\u0027s \u0060sampleRate\u0060. \u0060revision\u0060 grows with every edit and is\nthe ETag; \u0060dirty\u0060 says whether it has unsaved edits. Phase 6 (docs/07-phase-6.md): \u0060patternRegions\u0060\nare the Step Sequencer\u0027s regions; \u0060liveLoops\u0060 is the Live Loops grid. Phase 7 (docs/08-phase-7.md):\n\u0060grooves\u0060 are the project\u0027s groove templates, \u0060articulationSets\u0060 its articulation sets and\n\u0060laneSets\u0060 its Step Editor lane sets. Phase 9 (docs/10-phase-9.md): \u0060score\u0060 is its stored score content\n(staff styles, symbols, lyrics, chord symbols, score sets, layout). Phase 10 (docs/11-phase-10.md): \u0060movie\u0060\nis its movie (null: none). Phase 11 (docs/12-phase-11.md): \u0060chordTrack\u0060 is its chord track (chords, key and\nscale changes), \u0060sessionPlayerRegions\u0060 the Session Player regions of its Drummer, Bass Player and Keyboard\nPlayer tracks, and \u0060environment\u0060 its MIDI Environment (empty: physical input to sequencer input)."
+        "description": "The open project (docs/01-implementation-plan.md \u00A75). Musical positions are ticks at 960 PPQ; audio offsets,\nlengths and fades are frames at the project\u0027s \u0060sampleRate\u0060. \u0060revision\u0060 grows with every edit and is\nthe ETag; \u0060dirty\u0060 says whether it has unsaved edits. Phase 6 (docs/07-phase-6.md): \u0060patternRegions\u0060\nare the Step Sequencer\u0027s regions; \u0060liveLoops\u0060 is the Live Loops grid. Phase 7 (docs/08-phase-7.md):\n\u0060grooves\u0060 are the project\u0027s groove templates, \u0060articulationSets\u0060 its articulation sets and\n\u0060laneSets\u0060 its Step Editor lane sets. Phase 9 (docs/10-phase-9.md): \u0060score\u0060 is its stored score content\n(staff styles, symbols, lyrics, chord symbols, score sets, layout). Phase 10 (docs/11-phase-10.md): \u0060movie\u0060\nis its movie (null: none). Phase 11 (docs/12-phase-11.md): \u0060chordTrack\u0060 is its chord track (chords, key and\nscale changes), \u0060sessionPlayerRegions\u0060 the Session Player regions of its Drummer, Bass Player and Keyboard\nPlayer tracks, and \u0060environment\u0060 its MIDI Environment (empty: physical input to sequencer input).\n\u0060offline\u0060 is what the disk lacks of it (not stored; the \u0060offlineChanged\u0060 event follows it)."
       },
       "ProjectAlternative": {
         "required": [
@@ -18957,6 +19441,31 @@
         },
         "description": "How recording works: cycle recording mode; replace mode (a recording removes what it covers on its track); and\nautopunch, which records only between \u0060punchInTick\u0060 and \u0060punchOutTick\u0060 while playback continues around\nthem."
       },
+      "RecoverableProject": {
+        "required": [
+          "id",
+          "name",
+          "path",
+          "autosaved"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "path": {
+            "type": "string"
+          },
+          "autosaved": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "description": "A project whose edits since its last save survive in an autosave, offered after a crash (docs/04-phase-3.md,\n\u0022Autosave and crash recovery\u0022). \u0060autosaved\u0060 is when they were last written."
+      },
       "RegenerateRequest": {
         "type": "object",
         "properties": {
@@ -19059,6 +19568,37 @@
           }
         },
         "description": "How a MIDI region plays, without changing its notes (Logic\u0027s Region inspector): transpose in semitones,\nvelocity offset (\u2212127\u2026127), quantise grid in ticks (0: off) with strength (0\u20261, 1 = all the way) and swing\n(0\u20261, 0 = straight; delays every second grid step by up to half a step). \u0060grooveId\u0060 (Phase 7): it\nquantises to that groove template of the project instead of the grid (\u0060quantizeTicks\u0060 and \u0060swing\u0060\nthen unused; null: the grid)."
+      },
+      "RelinkRequest": {
+        "required": [
+          "files"
+        ],
+        "type": "object",
+        "properties": {
+          "files": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/RelinkTarget"
+            }
+          }
+        },
+        "description": "Relinks files, as one undo step."
+      },
+      "RelinkTarget": {
+        "required": [
+          "fileId",
+          "path"
+        ],
+        "type": "object",
+        "properties": {
+          "fileId": {
+            "type": "string"
+          },
+          "path": {
+            "type": "string"
+          }
+        },
+        "description": "Points a file of the project at a WAV on the server\u0027s disk."
       },
       "RemotePads": {
         "required": [

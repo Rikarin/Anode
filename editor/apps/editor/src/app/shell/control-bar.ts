@@ -128,8 +128,9 @@ import { Lcd } from './lcd';
             <span
               class="bg-foreground-muted size-1.5 shrink-0 rounded-full"
               data-testid="unsaved"
-              aria-label="Unsaved changes"
               role="img"
+              [attr.aria-label]="unsavedLabel()"
+              [attr.title]="unsavedLabel()"
             ></span>
           }
           <button
@@ -152,6 +153,9 @@ import { Lcd } from './lcd';
                 (click)="ui.saveAlternativeOpen.set(true)"
               >
                 Save as Alternative…
+              </button>
+              <button xuiMenuItem type="button" data-testid="missing-files" (click)="ui.missingFilesOpen.set(true)">
+                Missing Files…
               </button>
               <button
                 xuiMenuItem
@@ -839,6 +843,12 @@ export class ControlBar {
   protected keyOf(id: string): string {
     const binding = this.keys.bindingOf(id);
     return binding ? formatBinding(binding) : 'no key';
+  }
+
+  /** The unsaved marker's words: whether the edits are safe in an autosave yet. */
+  protected unsavedLabel(): string {
+    const autosaved = this.project.autosaved();
+    return autosaved ? `Unsaved changes, autosaved ${this.savedAt(autosaved)}` : 'Unsaved changes';
   }
 
   protected savedAt(iso: string): string {
