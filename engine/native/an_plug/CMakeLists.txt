@@ -44,6 +44,8 @@ target_compile_definitions(an_vst3_common PUBLIC RELEASE=1)
 target_compile_options(an_vst3_common PRIVATE -w)
 if(WIN32)
   target_compile_definitions(an_vst3_common PUBLIC UNICODE _UNICODE)
+  # The SDK picks its C++20 paths from __cplusplus, which MSVC leaves at 199711L without this.
+  target_compile_options(an_vst3_common PUBLIC /Zc:__cplusplus)
 endif()
 if(APPLE)
   target_link_libraries(an_vst3_common PUBLIC "-framework CoreFoundation")

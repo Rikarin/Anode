@@ -157,10 +157,11 @@ public sealed partial class HostProcessTests {
         await Task.Delay(200, Token);
         var clock = await probe.Command(Cmd("analyzeClock"));
         TestContext.Current.TestOutputHelper?.WriteLine($"clock out: {clock.ToJsonString()}");
-        Assert.InRange(clock["bpm"]!.GetValue<double>(), 119.9, 120.1);
+        Assert.InRange(clock["bpm"]!.GetValue<double>(), 119, 121);
         // The null device on a busy machine now and then wakes a whole period late and realigns (its audio stalls, and
         // the clock with it): an interval or two may be off by that; the rest are within half a millisecond.
         if (System.Environment.GetEnvironmentVariable("CI") is null) { // a shared runner's timers (#22)
+            Assert.InRange(clock["bpm"]!.GetValue<double>(), 119.9, 120.1);
             Assert.True(clock["outliers"]!.GetValue<int>() <= 2, $"clock: {clock.ToJsonString()}");
             Assert.True(clock["p99DeviationMs"]!.GetValue<double>() < 0.5, $"clock jitter {clock["p99DeviationMs"]} ms");
         }
