@@ -29,8 +29,10 @@ public sealed class TimeEditTests {
         return state.Regions.Values.Single(r => r.TrackId == track && r.StartTick == start).Id;
     }
 
-    (long Start, long Offset, long Length)[] Spans() =>
-        [..state.Regions.Values.OrderBy(static r => r.StartTick).Select(static r => (r.StartTick, r.FileOffset, r.Length))];
+    (long Start, long Offset, long Length)[] Spans() => [
+        ..state.Regions.Values.OrderBy(static r => r.StartTick)
+            .Select(static r => (r.StartTick, r.FileOffset, r.Length))
+    ];
 
     [Fact]
     public void Inserting_splits_what_crosses_and_moves_what_follows_on_every_track() {
@@ -193,7 +195,7 @@ public sealed class TimeEditTests {
     [Fact]
     public void Take_folders_split_with_their_takes_and_comp() {
         var a = Audio();
-        Region(a, 0, 192_000);
+        Region(a, 0);
         Apply(new PackTakeFolderCommand([state.Regions.Keys.Single()]));
         Apply(new InsertTimeCommand(Bar, Bar));
         var folders = state.TakeFolders.Values.OrderBy(static f => f.StartTick).ToArray();
@@ -246,5 +248,43 @@ public sealed class TimeEditTests {
         var before = RandomProjects.Json(state);
         var result = Edits.Apply(state, new CutTimeCommand(Bar / 2, Bar), ids);
         Assert.Equal(before, RandomProjects.Json(result.State.Apply(result.Inverse)));
+    }
+
+    [Theory]
+    [InlineData(2, MusicalUnit.Bars, 3 * Bar, Bar)]
+    [InlineData(1, MusicalUnit.Beats, Bar, Bar - 960)]
+    [InlineData(4, MusicalUnit.Bars, Bar, 0)]
+    [InlineData(0, MusicalUnit.Bars, Bar, Bar)]
+    public void A_pre_roll_goes_back_in_the_signature_in_force(int length, MusicalUnit unit, long from, long start) {
+        Apply(new SetRecordingCommand(PreRollLength: length, PreRollUnit: unit));
+        Assert.Equal(start, Edits.PreRollStart(state, from));
+    }
+
+    [Fact]
+    public void A_pre_roll_counts_back_across_a_signature_change() {
+        Apply(
+            new SetSignaturesCommand([new(0, 3, 4), new(2880, 4, 4)]),
+            new SetRecordingCommand(PreRollLength: 2, PreRollUnit: MusicalUnit.Bars)
+        );
+        Assert.Equal(2880 - 2880, Edits.PreRollStart(state, 2880 + 3840));
+    }
+
+    [Fact]
+    public void Lengths_stay_in_range() {
+        Assert.Throws<EditException>(() => Apply(new SetMetronomeCommand(CountInLength: 0)));
+        Assert.Throws<EditException>(() => Apply(new SetMetronomeCommand(CountInLength: 33)));
+        Assert.Throws<EditException>(() => Apply(new SetRecordingCommand(PreRollLength: -1)));
+        Assert.Throws<EditException>(() => Apply(new SetRecordingCommand(PreRollLength: 33)));
+    }
+
+    [Fact]
+    public void A_recording_with_a_pre_roll_is_clipped_to_where_it_was_started_from() {
+        var recording = state.Settings.Recording;
+        var rolled = Recordings.PreRolled(recording, Bar);
+        Assert.Equal((true, Bar), (rolled.Autopunch, rolled.PunchInTick));
+        var passes = Recordings.Punched(state, [new(0, 0, 192_000)], rolled);
+        Assert.Equal(new(96_000, 96_000, 96_000), Assert.Single(passes));
+        var punched = recording with { Autopunch = true, PunchInTick = 2 * Bar, PunchOutTick = 3 * Bar };
+        Assert.Equal(punched, Recordings.PreRolled(punched, Bar));
     }
 }

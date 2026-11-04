@@ -38,7 +38,8 @@ public sealed record CompiledModel(
 ///     Incremental: a track is recompiled only when its regions (audio or MIDI), take folders, their files, the tempo
 ///     track or the sample rate changed since the previous call; otherwise the previous <see cref="TrackModel" />
 ///     instance is reused, so a caller finds the dirty tracks by reference.
-///     Regions that loop play their repeats (<see cref="Loops" />). Phase 11 (docs/12-phase-11.md): Session Player regions play as MIDI regions of the notes the server generated
+///     Regions that loop play their repeats (<see cref="Loops" />). Phase 11 (docs/12-phase-11.md): Session Player regions
+///     play as MIDI regions of the notes the server generated
 ///     for them (<c>sessionPlayers</c>, by region id; a Drummer's through its kit's pads, as a Drum Machine Designer's);
 ///     regions that follow the chord track play as <see cref="PitchFollow" /> says, and recompile when the chord track
 ///     or the key track changes.

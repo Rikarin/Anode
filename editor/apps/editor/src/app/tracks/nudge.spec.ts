@@ -83,4 +83,19 @@ describe('transientTicks', () => {
     // 120 bpm: a beat is 24 000 frames.
     expect(transientTicks(timing, [0, 24_000, 48_000, 72_000])).toEqual([3840, 4800]);
   });
+
+  it('finds them again in a loop’s repeats, up to where they stop', () => {
+    const region: TimedRegion = {
+      startTick: 0,
+      fileOffset: 0,
+      length: 48_000,
+      follow: 'off',
+      flexMarkers: [],
+      transpose: 0,
+      fineTune: 0,
+      pitchNotes: []
+    };
+    const timing = new RegionTiming(region, false, null, context);
+    expect(transientTicks(timing, [0, 24_000], 2880)).toEqual([0, 960, 1920]);
+  });
 });

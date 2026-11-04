@@ -265,7 +265,7 @@ import { FakeMidiEffects, FakeT2Effects, FakeT2Instruments, RemixFxId, withMacro
 import { checkedLoop, convertLoops, refuseLooped } from './fake-region-loops';
 import { FakeScriptPresets } from './fake-scripts';
 import { FactoryStaffStyles } from './fake-staff-styles';
-import { applyTimeEdit } from './fake-time-edit';
+import { applyTimeEdit, preRollStart, rollLength } from './fake-time-edit';
 
 /** Ticks per quarter note (the contract's time base). */
 const Ppq = 960;
@@ -612,7 +612,7 @@ export class FakeAnodeServer implements AnodeApi {
           tempo: 120,
           signature: { numerator: 4, denominator: 4 },
           cycle: { enabled: false, startTick: 0, endTick: 4 * 4 * Ppq },
-          metronome: { enabled: false, countIn: false, levelDb: -6 },
+          metronome: { enabled: false, countIn: false, levelDb: -6, countInLength: 1, countInUnit: 'bars' },
           endTick: DefaultEndTick,
           mergeMidiRecording: false,
           tempoEvents: [{ tick: 0, bpm: 120, curve: 'step', shape: 0 }],
@@ -623,7 +623,9 @@ export class FakeAnodeServer implements AnodeApi {
             replace: false,
             autopunch: false,
             punchInTick: 0,
-            punchOutTick: 4 * 4 * Ppq
+            punchOutTick: 4 * 4 * Ppq,
+            preRollLength: 0,
+            preRollUnit: 'bars'
           },
           mixer: { pdc: 'all', lowLatency: false, lowLatencyLimitMs: 10 },
           smartTempo: { mode: 'keep', defaultFollow: 'off', analyzeImports: true },
@@ -944,8 +946,13 @@ export class FakeAnodeServer implements AnodeApi {
             throw new ApiError(422, 'Record-enable a track first.');
           }
 
-          this.start('recording', request.tick);
-          this.recordFrom = this.positionTick;
+          // A pre-roll plays before the playhead; the take starts at it.
+          {
+            const from = request.tick ?? this.positionTick;
+            const stopped = this.transportState === 'stopped';
+            this.start('recording', stopped ? preRollStart(project, from) : request.tick);
+            this.recordFrom = stopped ? from : this.positionTick;
+          }
           this.held.clear();
           this.captured.clear();
           break;
@@ -4618,6 +4625,8 @@ export class FakeAnodeServer implements AnodeApi {
             metronome: {
               enabled: command.enabled ?? m.enabled,
               countIn: command.countIn ?? m.countIn,
+              countInLength: rollLength(command.countInLength, m.countInLength),
+              countInUnit: command.countInUnit ?? m.countInUnit,
               levelDb: command.levelDb ?? m.levelDb
             }
           }
@@ -5025,8 +5034,13 @@ export class FakeAnodeServer implements AnodeApi {
           replace: command.replace ?? r.replace,
           autopunch: command.autopunch ?? r.autopunch,
           punchInTick: Math.round(command.punchInTick ?? r.punchInTick),
-          punchOutTick: Math.round(command.punchOutTick ?? r.punchOutTick)
+          punchOutTick: Math.round(command.punchOutTick ?? r.punchOutTick),
+          preRollLength: command.preRollLength ?? r.preRollLength,
+          preRollUnit: command.preRollUnit ?? r.preRollUnit
         };
+        if (next.preRollLength < 0 || next.preRollLength > 32) {
+          throw new ApiError(422, 'A pre-roll is 0 to 32 bars or beats.');
+        }
         if (next.punchInTick < 0 || next.punchOutTick <= next.punchInTick) {
           throw new ApiError(422, 'The punch range must end after it starts.');
         }
@@ -5650,7 +5664,7 @@ export class FakeAnodeServer implements AnodeApi {
         tempo: 112,
         signature: { numerator: 4, denominator: 4 },
         cycle: { enabled: false, startTick: 4 * 4 * Ppq, endTick: 8 * 4 * Ppq },
-        metronome: { enabled: false, countIn: true, levelDb: -6 },
+        metronome: { enabled: false, countIn: true, levelDb: -6, countInLength: 1, countInUnit: 'bars' },
         endTick: DefaultEndTick,
         mergeMidiRecording: false,
         tempoEvents: [{ tick: 0, bpm: 112, curve: 'step', shape: 0 }],
@@ -5661,7 +5675,9 @@ export class FakeAnodeServer implements AnodeApi {
           replace: false,
           autopunch: false,
           punchInTick: 0,
-          punchOutTick: 4 * 4 * Ppq
+          punchOutTick: 4 * 4 * Ppq,
+          preRollLength: 0,
+          preRollUnit: 'bars'
         },
         mixer: { pdc: 'all', lowLatency: false, lowLatencyLimitMs: 10 },
         smartTempo: { mode: 'keep', defaultFollow: 'off', analyzeImports: true },

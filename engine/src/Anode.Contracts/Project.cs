@@ -84,8 +84,27 @@ public sealed record TimeSignature(int Numerator, int Denominator);
 
 public sealed record CycleRange(bool Enabled, long StartTick, long EndTick);
 
-/// <summary>The click: on or off, a one-bar count-in before recording, and its level in dB.</summary>
-public sealed record MetronomeSettings(bool Enabled, bool CountIn, double LevelDb);
+/// <summary>What a count-in or a pre-roll is counted in: bars or beats of the signature in force.</summary>
+[JsonConverter(typeof(JsonStringEnumConverter<MusicalUnit>))]
+public enum MusicalUnit {
+    [JsonStringEnumMemberName("bars")]
+    Bars,
+
+    [JsonStringEnumMemberName("beats")]
+    Beats
+}
+
+/// <summary>
+///     The click: on or off, a count-in before recording from a stop, and its level in dB. The count-in lasts
+///     <c>countInLength</c> (1…32) of <c>countInUnit</c>, measured at where recording starts.
+/// </summary>
+public sealed record MetronomeSettings(
+    bool Enabled,
+    bool CountIn,
+    double LevelDb,
+    int CountInLength = 1,
+    MusicalUnit CountInUnit = MusicalUnit.Bars
+);
 
 [JsonConverter(typeof(JsonStringEnumConverter<TrackKind>))]
 public enum TrackKind {

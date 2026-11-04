@@ -164,10 +164,6 @@ public static partial class Edits {
             SplitRegionCommand c => SplitRegion(state, c, ids),
             SetRegionCommand c => SetRegion(state, c),
             DeleteRegionsCommand c => DeleteRegions(state, c),
-            ConvertLoopsCommand c => ConvertLoops(state, c, ids),
-            InsertTimeCommand c => InsertTime(state, c, ids),
-            CutTimeCommand c => CutTime(state, c, ids),
-            RippleDeleteCommand c => RippleDelete(state, c),
             SetTempoCommand c => SetTempo(state, c),
             SetSignatureCommand c => SetSignature(state, c),
             SetCycleCommand c => SetCycle(state, c),
@@ -238,7 +234,8 @@ public static partial class Edits {
             SetMixerSettingsCommand c => SetMixerSettings(state, c),
             ApplyPatchCommand c => ApplyPatch(state, c, ids, patches ?? NoPatches.Instance),
             UnfreezeTrackCommand c => UnfreezeTrack(state, c),
-            _ => FlexOps(state, command, ids, plugins, analysis ?? NoAnalysis.Instance)
+            _ => TimeOps(state, command, ids)
+                ?? FlexOps(state, command, ids, plugins, analysis ?? NoAnalysis.Instance)
                 ?? Phase6Ops(state, command, ids, plugins, patches ?? NoPatches.Instance)
                 ?? Phase7Ops(state, command, ids, analysis ?? NoAnalysis.Instance)
                 ?? Phase8Ops(state, command, ids, plugins)
@@ -840,11 +837,23 @@ public static partial class Edits {
             throw new EditException($"Click level {level} dB is outside {MinClickDb}…{MaxClickDb} dB.");
         }
 
+        if (c.CountInLength is < 1 or > MaxRollLength) {
+            throw new EditException($"A count-in is 1…{MaxRollLength} bars or beats, not {c.CountInLength}.");
+        }
+
         var old = state.Settings.Metronome;
+        var unit = c.CountInUnit ?? old.CountInUnit;
+        CheckUnit(unit);
         return [
             new SettingsChanged(
                 state.Settings with {
-                    Metronome = new(c.Enabled ?? old.Enabled, c.CountIn ?? old.CountIn, c.LevelDb ?? old.LevelDb)
+                    Metronome = new(
+                        c.Enabled ?? old.Enabled,
+                        c.CountIn ?? old.CountIn,
+                        c.LevelDb ?? old.LevelDb,
+                        c.CountInLength ?? old.CountInLength,
+                        unit
+                    )
                 }
             )
         ];

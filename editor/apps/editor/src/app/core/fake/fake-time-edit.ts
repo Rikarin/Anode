@@ -1,5 +1,25 @@
 import { ApiError, type AutomationPoint, type EditCommand, type Project } from '@anode/api-client';
-import { automationValueAt } from '@anode/timeline';
+import { automationValueAt, MeterMap } from '@anode/timeline';
+
+/** A count-in's length as a command sets it: 1…32 bars or beats. */
+export function rollLength(value: number | null | undefined, current: number): number {
+  const length = value ?? current;
+  if (!(length >= 1 && length <= 32)) {
+    throw new ApiError(422, 'A count-in is 1 to 32 bars or beats.');
+  }
+  return length;
+}
+
+/** Where a recording from `tick` starts playing: its pre-roll before, at most to the project start. */
+export function preRollStart(project: Project, tick: number): number {
+  const { preRollLength, preRollUnit } = project.settings.recording;
+  const meter = new MeterMap(project.settings.signatures);
+  let start = tick;
+  for (let i = 0; i < preRollLength && start > 0; i++) {
+    start -= preRollUnit === 'bars' ? meter.barTicksAt(start - 1) : meter.beatTicksAt(start - 1);
+  }
+  return Math.max(0, start);
+}
 
 /** Commands the fake's time edits are made of. */
 export interface TimeEditContext {

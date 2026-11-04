@@ -13342,6 +13342,23 @@
               "number"
             ],
             "format": "double"
+          },
+          "countInLength": {
+            "type": [
+              "null",
+              "integer"
+            ],
+            "format": "int32"
+          },
+          "countInUnit": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/MusicalUnit"
+              }
+            ]
           }
         }
       },
@@ -13477,7 +13494,7 @@
             "format": "int64"
           }
         },
-        "description": "Changes a MIDI region\u0027s name, mute, loop or playback parameters. \u0060grooveId\u0060 (Phase 7) makes its playback quantise\nfollow a groove template of the project; an empty string returns it to the grid."
+        "description": "Changes a MIDI region\u0027s name, mute, loop or playback parameters. \u0060grooveId\u0060 (Phase 7) makes its playback\nquantise\nfollow a groove template of the project; an empty string returns it to the grid."
       },
       "EditCommandSetMixerSettingsCommand": {
         "required": [
@@ -13894,6 +13911,23 @@
               "integer"
             ],
             "format": "int64"
+          },
+          "preRollLength": {
+            "type": [
+              "null",
+              "integer"
+            ],
+            "format": "int32"
+          },
+          "preRollUnit": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/MusicalUnit"
+              }
+            ]
           }
         }
       },
@@ -17281,7 +17315,9 @@
         "required": [
           "enabled",
           "countIn",
-          "levelDb"
+          "levelDb",
+          "countInLength",
+          "countInUnit"
         ],
         "type": "object",
         "properties": {
@@ -17294,9 +17330,17 @@
           "levelDb": {
             "type": "number",
             "format": "double"
+          },
+          "countInLength": {
+            "type": "integer",
+            "format": "int32",
+            "default": 1
+          },
+          "countInUnit": {
+            "$ref": "#/components/schemas/MusicalUnit"
           }
         },
-        "description": "The click: on or off, a one-bar count-in before recording, and its level in dB."
+        "description": "The click: on or off, a count-in before recording from a stop, and its level in dB. The count-in lasts\n\u0060countInLength\u0060 (1\u202632) of \u0060countInUnit\u0060, measured at where recording starts."
       },
       "MidiDevices": {
         "required": [
@@ -17861,6 +17905,14 @@
           "fps30"
         ],
         "description": "An MTC frame rate."
+      },
+      "MusicalUnit": {
+        "enum": [
+          "bars",
+          "beats"
+        ],
+        "description": "What a count-in or a pre-roll is counted in: bars or beats of the signature in force.",
+        "default": "bars"
       },
       "MusicXmlExportRequest": {
         "required": [
@@ -19602,7 +19654,9 @@
           "replace",
           "autopunch",
           "punchInTick",
-          "punchOutTick"
+          "punchOutTick",
+          "preRollLength",
+          "preRollUnit"
         ],
         "type": "object",
         "properties": {
@@ -19622,9 +19676,17 @@
           "punchOutTick": {
             "type": "integer",
             "format": "int64"
+          },
+          "preRollLength": {
+            "type": "integer",
+            "format": "int32",
+            "default": 0
+          },
+          "preRollUnit": {
+            "$ref": "#/components/schemas/MusicalUnit"
           }
         },
-        "description": "How recording works: cycle recording mode; replace mode (a recording removes what it covers on its track); and\nautopunch, which records only between \u0060punchInTick\u0060 and \u0060punchOutTick\u0060 while playback continues around\nthem."
+        "description": "How recording works: cycle recording mode; replace mode (a recording removes what it covers on its track); and\nautopunch, which records only between \u0060punchInTick\u0060 and \u0060punchOutTick\u0060 while playback continues around\nthem. \u0060preRollLength\u0060 (0\u202632, 0: none) of \u0060preRollUnit\u0060 is how far before the playhead a recording from a\nstop starts playing: what plays there is the project, and the take starts at the playhead (the pre-roll is kept\nin its file, before the region). It stops at the project start."
       },
       "RecoverableProject": {
         "required": [

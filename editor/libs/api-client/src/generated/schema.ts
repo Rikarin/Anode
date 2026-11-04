@@ -4713,6 +4713,9 @@ export interface components {
       countIn?: null | boolean;
       /** Format: double */
       levelDb?: null | number;
+      /** Format: int32 */
+      countInLength?: null | number;
+      countInUnit?: null | components['schemas']['MusicalUnit'];
     };
     EditCommandSetMidiIoCommand: {
       /** @enum {string} */
@@ -4727,7 +4730,8 @@ export interface components {
       merge: boolean;
     };
     /**
-     * @description Changes a MIDI region's name, mute, loop or playback parameters. `grooveId` (Phase 7) makes its playback quantise
+     * @description Changes a MIDI region's name, mute, loop or playback parameters. `grooveId` (Phase 7) makes its playback
+     *     quantise
      *     follow a groove template of the project; an empty string returns it to the grid.
      */
     EditCommandSetMidiRegionCommand: {
@@ -4896,6 +4900,9 @@ export interface components {
       punchInTick?: null | number;
       /** Format: int64 */
       punchOutTick?: null | number;
+      /** Format: int32 */
+      preRollLength?: null | number;
+      preRollUnit?: null | components['schemas']['MusicalUnit'];
     };
     EditCommandSetRegionCommand: {
       /** @enum {string} */
@@ -6087,12 +6094,21 @@ export interface components {
       settings: components['schemas']['MasteringSettings'];
       analysis: null | components['schemas']['MasteringAnalysis'];
     };
-    /** @description The click: on or off, a one-bar count-in before recording, and its level in dB. */
+    /**
+     * @description The click: on or off, a count-in before recording from a stop, and its level in dB. The count-in lasts
+     *     `countInLength` (1…32) of `countInUnit`, measured at where recording starts.
+     */
     MetronomeSettings: {
       enabled: boolean;
       countIn: boolean;
       /** Format: double */
       levelDb: number;
+      /**
+       * Format: int32
+       * @default 1
+       */
+      countInLength: number;
+      countInUnit: components['schemas']['MusicalUnit'];
     };
     MidiDevices: {
       inputs: components['schemas']['MidiPort'][];
@@ -6334,6 +6350,12 @@ export interface components {
      * @enum {unknown}
      */
     MtcFrameRate: 'fps24' | 'fps25' | 'fps2997Drop' | 'fps30';
+    /**
+     * @description What a count-in or a pre-roll is counted in: bars or beats of the signature in force.
+     * @default bars
+     * @enum {unknown}
+     */
+    MusicalUnit: 'bars' | 'beats';
     /**
      * @description MusicXML 4.0 export (`POST /project/export/musicxml`, job `musicXmlExport`): score set
      *     `setId` (null: every MIDI track) as a partwise score, or one track's part (`partTrackId`);
@@ -6987,7 +7009,9 @@ export interface components {
     /**
      * @description How recording works: cycle recording mode; replace mode (a recording removes what it covers on its track); and
      *     autopunch, which records only between `punchInTick` and `punchOutTick` while playback continues around
-     *     them.
+     *     them. `preRollLength` (0…32, 0: none) of `preRollUnit` is how far before the playhead a recording from a
+     *     stop starts playing: what plays there is the project, and the take starts at the playhead (the pre-roll is kept
+     *     in its file, before the region). It stops at the project start.
      */
     RecordingSettings: {
       cycleMode: components['schemas']['CycleRecordMode'];
@@ -6997,6 +7021,12 @@ export interface components {
       punchInTick: number;
       /** Format: int64 */
       punchOutTick: number;
+      /**
+       * Format: int32
+       * @default 0
+       */
+      preRollLength: number;
+      preRollUnit: components['schemas']['MusicalUnit'];
     };
     /**
      * @description A project whose edits since its last save survive in an autosave, offered after a crash (docs/04-phase-3.md,

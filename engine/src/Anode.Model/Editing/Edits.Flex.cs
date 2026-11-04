@@ -16,6 +16,7 @@ public static partial class Edits {
 
     /// <summary>How much longer a region may stretch to.</summary>
     public const double MaxStretch = 4;
+
     public const int MaxPitchNotes = 10_000;
     public const int MaxRegionTranspose = 36;
     public const int MaxFineTune = 50;

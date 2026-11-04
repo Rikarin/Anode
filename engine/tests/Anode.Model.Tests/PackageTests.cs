@@ -324,8 +324,15 @@ public sealed class PackageTests : IDisposable {
     [Fact]
     public void A_schema_11_package_loads_with_regions_that_do_not_loop_or_stretch() {
         var (state, _, _) = RandomProjects.Build(3, 40);
+        var settings = state.Settings;
         state = state.Apply(
             [
+                new SettingsChanged(
+                    settings with {
+                        Metronome = settings.Metronome with { CountInLength = 1, CountInUnit = MusicalUnit.Bars },
+                        Recording = settings.Recording with { PreRollLength = 0, PreRollUnit = MusicalUnit.Bars }
+                    }
+                ),
                 ..state.Regions.Values.Select(static r => new RegionUpserted(r with { LoopTicks = 0, Stretch = 1 })),
                 ..state.MidiRegions.Values.Select(static r => new MidiRegionUpserted(r with { LoopTicks = 0 })),
                 ..state.PatternRegions.Values.Select(static r => new PatternRegionUpserted(r with { LoopTicks = 0 }))
@@ -336,6 +343,10 @@ public sealed class PackageTests : IDisposable {
         var path = Path.Combine(folder, "project.json");
         var root = JsonNode.Parse(File.ReadAllText(path))!.AsObject();
         root["schemaVersion"] = 11;
+        root["settings"]!["metronome"]!.AsObject().Remove("countInLength");
+        root["settings"]!["metronome"]!.AsObject().Remove("countInUnit");
+        root["settings"]!["recording"]!.AsObject().Remove("preRollLength");
+        root["settings"]!["recording"]!.AsObject().Remove("preRollUnit");
         File.WriteAllText(path, root.ToJsonString());
         foreach (var file in Directory.EnumerateFiles(Path.Combine(folder, "tracks"))) {
             var json = JsonNode.Parse(File.ReadAllText(file))!.AsObject();
@@ -356,6 +367,11 @@ public sealed class PackageTests : IDisposable {
         Assert.Equal(RandomProjects.Json(state), RandomProjects.Json(loaded));
         Assert.All(loaded.Regions.Values, static r => Assert.Equal(0, r.LoopTicks));
         Assert.All(loaded.Regions.Values, static r => Assert.Equal(1, r.Stretch));
+        Assert.Equal(
+            (1, MusicalUnit.Bars),
+            (loaded.Settings.Metronome.CountInLength, loaded.Settings.Metronome.CountInUnit)
+        );
+        Assert.Equal(0, loaded.Settings.Recording.PreRollLength);
         ProjectPackage.Save(folder, loaded);
         var saved = JsonNode.Parse(File.ReadAllText(path))!.AsObject();
         Assert.Equal(PackageMigrations.CurrentSchemaVersion, saved["schemaVersion"]!.GetValue<int>());
@@ -496,6 +512,32 @@ public sealed class PackageTests : IDisposable {
         var track = JsonNode.Parse(File.ReadAllText(Path.Combine(folder, "tracks", "trk_vocal0000001.json")))!;
         Assert.Equal(PackageMigrations.CurrentSchemaVersion, track["schemaVersion"]!.GetValue<int>());
         Assert.Empty(track["midiRegions"]!.AsArray());
+        Assert.Equal(RandomProjects.Json(state), RandomProjects.Json(ProjectPackage.Load(folder)));
+    }
+
+    [Fact]
+    public void A_schema_11_package_opens_without_loops_stretches_or_a_pre_roll_and_saves_as_the_current_schema() {
+        CopyFixture("Schema11.anode");
+        var state = ProjectPackage.Load(folder);
+        Assert.Equal(("prj_schema11fixture", "Schema 11 Song"), (state.Id, state.Name));
+        var region = Assert.Single(state.Regions.Values);
+        Assert.Equal((960L, 0L, 1.0), (region.StartTick, region.LoopTicks, region.Stretch));
+        Assert.Equal(0, Assert.Single(state.MidiRegions.Values).LoopTicks);
+        Assert.Equal(0, Assert.Single(state.PatternRegions.Values).LoopTicks);
+        Assert.Equal(
+            new MetronomeSettings(false, true, -6, 1, MusicalUnit.Bars),
+            state.Settings.Metronome
+        );
+        Assert.Equal(
+            (0, MusicalUnit.Bars, 3840L),
+            (state.Settings.Recording.PreRollLength, state.Settings.Recording.PreRollUnit,
+                state.Settings.Recording.PunchInTick)
+        );
+
+        ProjectPackage.Save(folder, state);
+        var saved = JsonNode.Parse(File.ReadAllText(Path.Combine(folder, "project.json")))!;
+        Assert.Equal(PackageMigrations.CurrentSchemaVersion, saved["schemaVersion"]!.GetValue<int>());
+        Assert.Equal(1, saved["settings"]!["metronome"]!["countInLength"]!.GetValue<int>());
         Assert.Equal(RandomProjects.Json(state), RandomProjects.Json(ProjectPackage.Load(folder)));
     }
 

@@ -17,9 +17,25 @@ public readonly record struct TakePass(long StartSample, long FileOffset, long F
 ///     where it was played, its file offset moved to match, so the audio stays where it was played to the sample.
 /// </summary>
 public static class Recordings {
-    /// <summary>The passes, clipped to the punch range when autopunch is on (empty ones dropped).</summary>
-    public static IReadOnlyList<TakePass> Punched(ProjectState state, IReadOnlyList<TakePass> passes) {
-        var recording = state.Settings.Recording;
+    /// <summary>
+    ///     The settings a recording with a pre-roll ran under: what played before <paramref name="tick" />, the playhead
+    ///     it was started from, is not recorded, as a punch-in there would have it; autopunch's own range stands.
+    /// </summary>
+    public static RecordingSettings PreRolled(RecordingSettings recording, long tick) =>
+        recording.Autopunch
+            ? recording
+            : recording with { Autopunch = true, PunchInTick = tick, PunchOutTick = Edits.MaxTick };
+
+    /// <summary>
+    ///     The passes, clipped to the punch range when autopunch is on (empty ones dropped). A recording that started
+    ///     with a pre-roll passes the settings it ran under (<see cref="PreRolled" />).
+    /// </summary>
+    public static IReadOnlyList<TakePass> Punched(
+        ProjectState state,
+        IReadOnlyList<TakePass> passes,
+        RecordingSettings? settings = null
+    ) {
+        var recording = settings ?? state.Settings.Recording;
         if (!recording.Autopunch) {
             return [..passes.Where(static p => p.Frames > 0)];
         }

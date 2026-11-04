@@ -35,6 +35,47 @@ public sealed unsafe class MetronomeTests : IDisposable {
         Assert.Equal((96_000L, 4), CountIn(Clicks(1, 4, 24_000), 5_000)); // a single bar has no second downbeat
     }
 
+    [Fact]
+    public void A_count_in_lasts_its_length_in_bars_or_beats() {
+        var fourFour = Clicks(8, 4, 24_000);
+
+        (long, int, int) Length(int length, bool beats) {
+            fixed (PlaybackEvent* p = fourFour.AsSpan()) {
+                return Metronome.CountInFor(new(p, fourFour.Length, null, 0), 100_000, Rate, length, beats);
+            }
+        }
+
+        Assert.Equal((96_000L, 4, 4), Length(1, false));
+        Assert.Equal((288_000L, 12, 4), Length(3, false));
+        Assert.Equal((24_000L, 1, 1), Length(1, true));
+        Assert.Equal((72_000L, 3, 3), Length(3, true));
+    }
+
+    [Fact]
+    public void A_count_in_of_two_bars_accents_each_bar() {
+        using var controller = Controller(Clicks(16, 4, 2_400));
+        controller.Engine.SetMetronome(false, 1f);
+        using var driver = new OfflineDriver(controller, 64);
+        var take = new RecordTake(1, Path.Combine(dir, "two-bars.wav"), 1, Rate);
+        using var segment = TestAudio.Segment([new(1, [], [])], 2);
+        controller.LoadModel(TestAudio.Load(segment, 2, false, [TestAudio.Track(1, input: 0, armed: true)], [], dir));
+        controller.Engine.Root.Tracks[0].Take = take;
+        driver.Send(new(EngineCommandKind.Locate, 48_000));
+        driver.Process();
+        driver.Send(new(EngineCommandKind.Record, 19_200, 8 | (4L << 32)));
+        var left = driver.Render(64 * 300).Left;
+        var accent = controller.Engine.Metronome.Accent;
+        var beat = controller.Engine.Metronome.Beat;
+        Assert.Equal(accent[5], left[5]);
+        Assert.Equal(beat[5], left[2_400 + 5]);
+        Assert.Equal(beat[5], left[7_200 + 5]);
+        Assert.Equal(accent[5], left[9_600 + 5]);
+        Assert.Equal(beat[5], left[12_000 + 5]);
+        driver.Send(new(EngineCommandKind.Stop));
+        driver.Process();
+        take.Dispose();
+    }
+
     EngineController Controller(PlaybackEvent[] clicks, long length = Rate * 10) {
         var controller = new EngineController(new(Rate, 64));
         using var segment = TestAudio.Segment([new(TrackEntry.MetronomeTrack, clicks, [])], 1, length);

@@ -630,6 +630,21 @@ public sealed partial class ProjectSession(
         }
     }
 
+    /// <summary>
+    ///     The tick a recording with a pre-roll was started from: what it took before there is not kept, as with a
+    ///     punch-in (<see cref="Recordings.PreRolled" />). Null without a pre-roll; the next recording sets it again.
+    /// </summary>
+    public long? PreRollTick {
+        get => Volatile.Read(ref preRollTick) is >= 0 and var tick ? tick : null;
+        set => Volatile.Write(ref preRollTick, value ?? -1);
+    }
+
+    long preRollTick = -1;
+
+    /// <summary>The recording settings a finished pass ran under.</summary>
+    RecordingSettings RecordingFor(ProjectState state) =>
+        PreRollTick is { } tick ? Recordings.PreRolled(state.Settings.Recording, tick) : state.Settings.Recording;
+
     /// <summary>The pass recording now (started when playback did), with the playhead's tick; null while stopped.</summary>
     (AutomationPass Pass, long Tick)? PassOf(Open o) {
         if (clock.Playing is not var (number, start, tick)) {
@@ -1168,7 +1183,7 @@ public sealed partial class ProjectSession(
             ]
             : [new(Math.Max(0, take.StartSample), 0, info.Frames)];
         if (!flashback) {
-            passes = Recordings.Punched(state, passes);
+            passes = Recordings.Punched(state, passes, RecordingFor(state));
         }
 
         return (file, Recordings.Audio(state, track, file, passes, flashback, ids));
@@ -1191,7 +1206,7 @@ public sealed partial class ProjectSession(
         var passStart = map.TickAtSample(Math.Max(0, take.StartSample), rate);
         var passEnd = Math.Max(passStart + 1, map.TickAtSample(Math.Max(0, take.EndSample), rate));
         var (notes, controls) = MidiRecording.Events(take, map, rate, passEnd, SwitchesOf(state, track));
-        var recording = state.Settings.Recording;
+        var recording = RecordingFor(state);
         if (!flashback && recording.Autopunch) {
             var (from, to) = (recording.PunchInTick, recording.PunchOutTick);
             notes = [..notes.Where(n => n.StartTick >= from && n.StartTick < to)];

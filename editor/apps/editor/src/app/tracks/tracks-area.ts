@@ -968,7 +968,9 @@ export class TracksArea {
     const ticks = await Promise.all(
       regions.map(async region => {
         const analysis = await this.flex.load(region.fileId);
-        return analysis ? transientTicks(this.project.timing(region), analysis.transients) : [];
+        const timing = this.project.timing(region);
+        const played = this.project.loopEndOf(region, timing.endTick);
+        return analysis ? transientTicks(timing, analysis.transients, played) : [];
       })
     );
     this.jumpTo(ticks.flat(), direction);

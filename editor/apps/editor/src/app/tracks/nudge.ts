@@ -1,5 +1,6 @@
 import type { EditCommand } from '@anode/api-client';
 import type { RegionTiming } from '../music/region-timing';
+import { loopRepeats } from './region-loop';
 import type { SnapContext } from './snap';
 
 /** The values regions nudge by (Logic's Nudge Value); the signature in force sets a bar and a beat. */
@@ -71,8 +72,20 @@ export function previousPoint(points: readonly number[], tick: number): number |
   return before.length > 0 ? Math.max(...before) : null;
 }
 
-/** Where a region's transients play: those of its file inside the part it plays, through its timing. */
-export function transientTicks(timing: RegionTiming, transients: readonly number[]): number[] {
+/**
+ * Where a region's transients play: those of its file inside the part it plays, through its timing, and again in each
+ * repeat up to `playedEnd`, where a loop's repeats stop.
+ */
+export function transientTicks(
+  timing: RegionTiming,
+  transients: readonly number[],
+  playedEnd = timing.endTick
+): number[] {
   const { fileOffset, length } = timing.region;
-  return transients.filter(f => f >= fileOffset && f < fileOffset + length).map(f => timing.tickAt(f));
+  const ticks = transients.filter(f => f >= fileOffset && f < fileOffset + length).map(f => timing.tickAt(f));
+  const repeats = loopRepeats(timing.startTick, timing.endTick - timing.startTick, playedEnd).flatMap(repeat => {
+    const by = repeat.startTick - timing.startTick;
+    return ticks.map(t => t + by).filter(t => t < repeat.startTick + repeat.lengthTicks);
+  });
+  return [...ticks, ...repeats];
 }

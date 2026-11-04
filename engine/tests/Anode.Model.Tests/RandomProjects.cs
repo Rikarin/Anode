@@ -614,7 +614,9 @@ static partial class RandomProjects {
                 Maybe(r.Next(2) == 0),
                 Maybe(r.Next(2) == 0)
             ),
-            nameof(AddRegionCommand) => Track() is { } t && files.Length > 0 ? AddRegion(t, Pick(r, files), r) : null,
+            nameof(AddRegionCommand) => (r.Next(2) == 0 ? FirstAudioTrack(s) : Track()) is { } t && files.Length > 0
+                ? AddRegion(t, Pick(r, files), r)
+                : null,
             nameof(MoveRegionCommand) => AnyRegion() is { } id
                 ? new MoveRegionCommand(id, r.NextInt64(0, 960 * 64), r.Next(2) == 0 ? null : Track())
                 : null,
@@ -651,7 +653,9 @@ static partial class RandomProjects {
             nameof(SetMetronomeCommand) => new SetMetronomeCommand(
                 Maybe(r.Next(2) == 0),
                 Maybe(r.Next(2) == 0),
-                Maybe((double)r.Next(-40, 1))
+                Maybe((double)r.Next(-40, 1)),
+                Maybe(r.Next(1, 9)),
+                Maybe(r.Next(2) == 0 ? MusicalUnit.Bars : MusicalUnit.Beats)
             ),
             nameof(RenameProjectCommand) => new RenameProjectCommand($"Song {r.Next(1000)}"),
             nameof(SetInstrumentCommand) => Instrument() is { } t

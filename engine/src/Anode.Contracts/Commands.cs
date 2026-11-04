@@ -311,7 +311,13 @@ public sealed record SetSignatureCommand(int Numerator, int Denominator) : EditC
 public sealed record SetCycleCommand(bool? Enabled = null, long? StartTick = null, long? EndTick = null)
     : EditCommand;
 
-public sealed record SetMetronomeCommand(bool? Enabled = null, bool? CountIn = null, double? LevelDb = null)
+public sealed record SetMetronomeCommand(
+    bool? Enabled = null,
+    bool? CountIn = null,
+    double? LevelDb = null,
+    int? CountInLength = null,
+    MusicalUnit? CountInUnit = null
+)
     : EditCommand;
 
 public sealed record RenameProjectCommand(string Name) : EditCommand;
@@ -345,7 +351,8 @@ public sealed record AddMidiRegionCommand(string TrackId, long StartTick, long L
 public sealed record ResizeMidiRegionCommand(string RegionId, long StartTick, long LengthTicks) : EditCommand;
 
 /// <summary>
-///     Changes a MIDI region's name, mute, loop or playback parameters. <c>grooveId</c> (Phase 7) makes its playback quantise
+///     Changes a MIDI region's name, mute, loop or playback parameters. <c>grooveId</c> (Phase 7) makes its playback
+///     quantise
 ///     follow a groove template of the project; an empty string returns it to the grid.
 /// </summary>
 public sealed record SetMidiRegionCommand(
@@ -489,7 +496,9 @@ public sealed record SetRecordingCommand(
     bool? Replace = null,
     bool? Autopunch = null,
     long? PunchInTick = null,
-    long? PunchOutTick = null
+    long? PunchOutTick = null,
+    int? PreRollLength = null,
+    MusicalUnit? PreRollUnit = null
 ) : EditCommand;
 
 /// <summary>Puts tracks into a new folder stack, inserted where the first of them was.</summary>

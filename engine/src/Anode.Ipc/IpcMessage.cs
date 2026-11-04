@@ -381,11 +381,18 @@ public sealed record SetCycleMessage(bool Enabled, long StartSample, long EndSam
 /// <summary>
 ///     Server → host: whether the metronome sounds (its clicks are events of track
 ///     <see cref="Segments.TrackEntry.MetronomeTrack" /> in the model) and at what linear gain, and whether a recording
-///     started from a stop gets a one-bar count-in (<paramref name="CountIn" />, the project's
-///     <c>MetronomeSettings.CountIn</c>). The host times the count-in from the model's clicks and sounds it at
+///     started from a stop gets a count-in (<paramref name="CountIn" />, the project's
+///     <c>MetronomeSettings.CountIn</c>) of <paramref name="CountInLength" /> bars, or beats with
+///     <paramref name="CountInBeats" />. The host times the count-in from the model's clicks and sounds it at
 ///     <paramref name="Gain" /> even when the metronome itself is off.
 /// </summary>
-public sealed record SetMetronomeMessage(bool Enabled, float Gain, bool CountIn = false) : IpcMessage;
+public sealed record SetMetronomeMessage(
+    bool Enabled,
+    float Gain,
+    bool CountIn = false,
+    int CountInLength = 1,
+    bool CountInBeats = false
+) : IpcMessage;
 
 /// <summary>
 ///     One recorded take: a WAV file the host finished writing. A take that wrapped (cycle recording, or a Flashback

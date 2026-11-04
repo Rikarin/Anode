@@ -41,6 +41,16 @@ public static partial class Edits {
         public bool Inside(long tick) => tick >= At && tick < End;
     }
 
+    /// <summary>The operations of an edit of time or of a loop; null for any other command.</summary>
+    static List<DeltaOp>? TimeOps(ProjectState state, EditCommand command, IIdSource ids) =>
+        command switch {
+            ConvertLoopsCommand c => ConvertLoops(state, c, ids),
+            InsertTimeCommand c => InsertTime(state, c, ids),
+            CutTimeCommand c => CutTime(state, c, ids),
+            RippleDeleteCommand c => RippleDelete(state, c),
+            _ => null
+        };
+
     static List<DeltaOp> InsertTime(ProjectState state, InsertTimeCommand c, IIdSource ids) {
         CheckTick(c.AtTick, "insert");
         CheckLength(c.LengthTicks);
@@ -117,40 +127,47 @@ public static partial class Edits {
 
     /// <summary>Splits what crosses <paramref name="tick" />: loops into regions, then audio, MIDI and take folders.</summary>
     static ProjectState SplitAt(ProjectState state, long tick, IIdSource ids, List<DeltaOp> ops) {
-        void Step(IEnumerable<DeltaOp> step) {
-            var list = step.ToArray();
-            ops.AddRange(list);
-            state = state.Apply(list);
-        }
-
-        var next = state.LastEventId;
-        foreach (var item in Timeline.Items(state).ToArray()) {
-            if (item.Kind is TimelineKind.AudioRegion or TimelineKind.MidiRegion or TimelineKind.PatternRegion
-                && item.Start < tick
-                && PlayedEnd(state, item) > tick) {
-                Step(LoopRegions(state, item, ids, ref next));
-            }
-        }
-
+        state = StepInto(state, ops, Unlooped(state, tick, ids));
         foreach (var region in state.Regions.Values.ToArray()) {
             if (SplitFrames(state, region, tick) is > 0 and var at && at < region.Length) {
-                Step(Split(region, at, tick, ids));
+                state = StepInto(state, ops, Split(region, at, tick, ids));
             }
         }
 
         foreach (var midi in state.MidiRegions.Values.ToArray()) {
             if (midi.StartTick < tick && tick < midi.StartTick + midi.LengthTicks) {
-                Step(SplitMidiRegion(midi, tick, ids));
+                state = StepInto(state, ops, SplitMidiRegion(midi, tick, ids));
             }
         }
 
         foreach (var folder in state.TakeFolders.Values.ToArray()) {
             if (folder.StartTick < tick && tick < folder.StartTick + folder.LengthTicks) {
-                Step(SplitFolder(state, folder, tick, ids));
+                state = StepInto(state, ops, SplitFolder(state, folder, tick, ids));
             }
         }
 
         return state;
+    }
+
+    static ProjectState StepInto(ProjectState state, List<DeltaOp> ops, IEnumerable<DeltaOp> step) {
+        var list = step.ToArray();
+        ops.AddRange(list);
+        return state.Apply(list);
+    }
+
+    /// <summary>The operations that turn into regions the loops playing across <paramref name="tick" />.</summary>
+    static List<DeltaOp> Unlooped(ProjectState state, long tick, IIdSource ids) {
+        var ops = new List<DeltaOp>();
+        var next = state.LastEventId;
+        foreach (var item in Timeline.Items(state)) {
+            if (item.Kind is TimelineKind.AudioRegion or TimelineKind.MidiRegion or TimelineKind.PatternRegion
+                && item.Start < tick
+                && PlayedEnd(state, item) > tick) {
+                ops.AddRange(LoopRegions(state, item, ids, ref next));
+            }
+        }
+
+        return ops;
     }
 
     /// <summary>
@@ -267,57 +284,38 @@ public static partial class Edits {
     /// <summary>What a change of time does to everything but regions.</summary>
     static List<DeltaOp> MovedGlobals(ProjectState state, TimeChange change) {
         var ops = new List<DeltaOp> { new SettingsChanged(Moved(state, change)) };
-        foreach (var marker in state.Markers.Values) {
-            if (change.Inside(marker.Tick)) {
-                ops.Add(new MarkerRemoved(marker.Id));
-            } else if (Span(marker.Tick, marker.LengthTicks + 1, change) is var (start, length)
-                       && (start, length - 1) != (marker.Tick, marker.LengthTicks)) {
-                ops.Add(new MarkerUpserted(marker with { Tick = start, LengthTicks = length - 1 }));
-            }
-        }
-
-        foreach (var section in state.Sections.Values) {
-            if (Span(section.StartTick, section.LengthTicks, change) is not var (start, length)) {
-                ops.Add(new SectionRemoved(section.Id));
-            } else if ((start, length) != (section.StartTick, section.LengthTicks)) {
-                ops.Add(new SectionUpserted(section with { StartTick = start, LengthTicks = length }));
-            }
-        }
-
+        ops.AddRange(MovedMarkers(state, change));
+        ops.AddRange(MovedSections(state, change));
         foreach (var lane in state.Automation.Values) {
             if (MovedPoints(lane.Points, change) is { Count: > 0 } points) {
                 ops.Add(new AutomationLaneUpserted(lane with { Points = points }));
             }
         }
 
-        foreach (var symbol in state.Score.Symbols.Where(s => s.Tick >= change.At)) {
-            ops.Add(
-                change.Inside(symbol.Tick!.Value)
-                    ? new ScoreSymbolRemoved(symbol.Id)
-                    : new ScoreSymbolUpserted(
-                        symbol with {
-                            Tick = change.Start(symbol.Tick!.Value),
-                            EndTick = symbol.EndTick is { } end ? change.Stop(end) : null
-                        }
-                    )
-            );
-        }
-
-        foreach (var chord in state.Score.Chords.Where(c => c.Tick >= change.At)) {
-            ops.Add(
-                change.Inside(chord.Tick)
-                    ? new ChordSymbolRemoved(chord.Id)
-                    : new ChordSymbolUpserted(chord with { Tick = change.Start(chord.Tick) })
-            );
-        }
-
+        ops.AddRange(MovedScore(state, change));
         var chords = state.ChordTrack;
         if (chords.Chords.Count + chords.Scales.Count > 0) {
             ops.Add(
                 new ChordTrackChanged(
                     new(
-                        [..Shifted(chords.Chords, change, static c => c.Tick, static (c, t) => c with { Tick = t }, false)],
-                        [..Shifted(chords.Scales, change, static s => s.Tick, static (s, t) => s with { Tick = t }, false)]
+                        [
+                            ..Shifted(
+                                chords.Chords,
+                                change,
+                                static c => c.Tick,
+                                static (c, t) => c with { Tick = t },
+                                false
+                            )
+                        ],
+                        [
+                            ..Shifted(
+                                chords.Scales,
+                                change,
+                                static s => s.Tick,
+                                static (s, t) => s with { Tick = t },
+                                false
+                            )
+                        ]
                     )
                 )
             );
@@ -330,6 +328,47 @@ public static partial class Edits {
         return ops;
     }
 
+    static IEnumerable<DeltaOp> MovedMarkers(ProjectState state, TimeChange change) {
+        foreach (var marker in state.Markers.Values) {
+            if (change.Inside(marker.Tick)) {
+                yield return new MarkerRemoved(marker.Id);
+            } else if (Span(marker.Tick, marker.LengthTicks + 1, change) is var (start, length)
+                       && (start, length - 1) != (marker.Tick, marker.LengthTicks)) {
+                yield return new MarkerUpserted(marker with { Tick = start, LengthTicks = length - 1 });
+            }
+        }
+    }
+
+    static IEnumerable<DeltaOp> MovedSections(ProjectState state, TimeChange change) {
+        foreach (var section in state.Sections.Values) {
+            if (Span(section.StartTick, section.LengthTicks, change) is not var (start, length)) {
+                yield return new SectionRemoved(section.Id);
+            } else if ((start, length) != (section.StartTick, section.LengthTicks)) {
+                yield return new SectionUpserted(section with { StartTick = start, LengthTicks = length });
+            }
+        }
+    }
+
+    /// <summary>Score symbols placed at a tick, and chord symbols; those on notes go with their notes.</summary>
+    static IEnumerable<DeltaOp> MovedScore(ProjectState state, TimeChange change) {
+        foreach (var symbol in state.Score.Symbols.Where(s => s.Tick >= change.At || s.EndTick > change.At)) {
+            yield return change.Inside(symbol.Tick!.Value)
+                ? new ScoreSymbolRemoved(symbol.Id)
+                : new ScoreSymbolUpserted(Moved(symbol, change));
+        }
+
+        foreach (var chord in state.Score.Chords.Where(c => c.Tick >= change.At)) {
+            yield return change.Inside(chord.Tick)
+                ? new ChordSymbolRemoved(chord.Id)
+                : new ChordSymbolUpserted(chord with { Tick = change.Start(chord.Tick) });
+        }
+    }
+
+    static ScoreSymbol Moved(ScoreSymbol symbol, TimeChange change) =>
+        symbol with {
+            Tick = change.Start(symbol.Tick!.Value), EndTick = symbol.EndTick is { } end ? change.Stop(end) : null
+        };
+
     /// <summary>The settings after a change: their global tracks, cycle, punch locators and project end.</summary>
     static ProjectSettings Moved(ProjectState state, TimeChange change) {
         var settings = state.Settings;
@@ -337,16 +376,18 @@ public static partial class Edits {
         var keys = settings.Keys ?? [new KeyEvent(0, 0, KeyMode.Major)];
         var signatures = MovedSignatures(state, change);
         var (cycleStart, cycleLength) = Span(
-            settings.Cycle.StartTick,
-            settings.Cycle.EndTick - settings.Cycle.StartTick,
-            change
-        ) ?? (change.At, settings.Cycle.EndTick - settings.Cycle.StartTick);
+                settings.Cycle.StartTick,
+                settings.Cycle.EndTick - settings.Cycle.StartTick,
+                change
+            )
+            ?? (change.At, settings.Cycle.EndTick - settings.Cycle.StartTick);
         var recording = settings.Recording;
         var (punchIn, punchLength) = Span(
-            recording.PunchInTick,
-            recording.PunchOutTick - recording.PunchInTick,
-            change
-        ) ?? (change.At, recording.PunchOutTick - recording.PunchInTick);
+                recording.PunchInTick,
+                recording.PunchOutTick - recording.PunchInTick,
+                change
+            )
+            ?? (change.At, recording.PunchOutTick - recording.PunchInTick);
         return settings with {
             Tempo = tempo[0].Bpm,
             TempoEvents = tempo,

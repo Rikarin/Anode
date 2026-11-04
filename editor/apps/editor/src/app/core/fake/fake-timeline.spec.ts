@@ -192,3 +192,44 @@ describe('FakeAnodeServer, editing time', () => {
     ]);
   });
 });
+
+describe('FakeAnodeServer, count-in and pre-roll', () => {
+  it('keeps the count-in length and the pre-roll, in their ranges', async () => {
+    const server = new FakeAnodeServer();
+    await audioProject(server);
+    const p = await run(
+      server,
+      { type: 'setMetronome', countIn: true, countInLength: 2, countInUnit: 'beats' },
+      { type: 'setRecording', preRollLength: 1, preRollUnit: 'bars' }
+    );
+    expect(p.settings.metronome).toMatchObject({ countIn: true, countInLength: 2, countInUnit: 'beats' });
+    expect(p.settings.recording).toMatchObject({ preRollLength: 1, preRollUnit: 'bars' });
+    await expect(run(server, { type: 'setMetronome', countInLength: 0 })).rejects.toMatchObject({ status: 422 });
+    await expect(run(server, { type: 'setRecording', preRollLength: 33 })).rejects.toMatchObject({ status: 422 });
+  });
+
+  it('records from a stop after its pre-roll, the take at the playhead', async () => {
+    const server = new FakeAnodeServer();
+    const { trackId } = await audioProject(server);
+    await run(
+      server,
+      { type: 'setTrack', trackId, input: null, recordArmed: true },
+      { type: 'setRecording', preRollLength: 1, preRollUnit: 'bars' }
+    );
+    const status = await server.controlTransport({ command: 'record', tick: Bar * 2 });
+    expect(status.positionTick).toBe(Bar);
+    await server.controlTransport({ command: 'stop' });
+  });
+
+  it('has no pre-roll to take at the project start', async () => {
+    const server = new FakeAnodeServer();
+    const { trackId } = await audioProject(server);
+    await run(
+      server,
+      { type: 'setTrack', trackId, input: null, recordArmed: true },
+      { type: 'setRecording', preRollLength: 2, preRollUnit: 'bars' }
+    );
+    expect((await server.controlTransport({ command: 'record', tick: 960 })).positionTick).toBe(0);
+    await server.controlTransport({ command: 'stop' });
+  });
+});

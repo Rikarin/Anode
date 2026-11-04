@@ -98,7 +98,10 @@ public sealed class StretchTests {
         Apply(new StretchRegionCommand(region, 2));
         Apply(new SplitRegionCommand(region, Bar));
         var parts = state.Regions.Values.OrderBy(static r => r.StartTick).ToArray();
-        Assert.Equal([(0L, 0L, 48_000L, 2.0), (Bar, 48_000, 48_000, 2.0)], parts.Select(static r => (r.StartTick, r.FileOffset, r.Length, r.Stretch)));
+        Assert.Equal(
+            [(0L, 0L, 48_000L, 2.0), (Bar, 48_000, 48_000, 2.0)],
+            parts.Select(static r => (r.StartTick, r.FileOffset, r.Length, r.Stretch))
+        );
     }
 
     [Fact]

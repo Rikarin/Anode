@@ -98,6 +98,27 @@ public sealed class RecordingApiTests {
     }
 
     [Fact]
+    public async Task A_pre_roll_starts_playing_earlier_and_the_take_starts_at_the_playhead() {
+        await using var server = new ServerFixture();
+        using var client = server.CreateClient();
+        await using var events = await EventStream.ConnectAsync(server);
+        await ArmedTrackAsync(server, client);
+        await client.EditAsync(new SetRecordingCommand(PreRollLength: 1, PreRollUnit: MusicalUnit.Beats));
+
+        await client.TransportAsync(TransportCommand.Record, 2 * Beat);
+        await events.WaitAsync<TransportEvent>(static e => e.Transport is {
+                State: TransportState.Recording, PositionTick: >= Beat and < 2 * Beat
+            }
+        );
+        await events.WaitAsync<TransportEvent>(static e => e.Transport.PositionTick >= 2 * Beat + Beat / 2);
+        await client.TransportAsync(TransportCommand.Stop);
+
+        await events.WaitAsync<ProjectChangedEvent>(static e => e.Delta.Ops.Any(static o => o is RegionUpserted));
+        var take = (await client.ProjectAsync()).Regions.Single();
+        Assert.Equal(2 * Beat, take.StartTick);
+    }
+
+    [Fact]
     public async Task Flashback_Capture_keeps_what_was_played_as_an_undoable_step() {
         await using var server = new ServerFixture();
         using var client = server.CreateClient();

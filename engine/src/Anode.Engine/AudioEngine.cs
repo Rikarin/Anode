@@ -46,6 +46,7 @@ public sealed unsafe partial class AudioEngine : IAudioProcessor {
     long countInTotal;
     long countInRemaining;
     int countInBeats;
+    int countInAccent;
     int callbackFrames;
     bool metronomeEnabled;
     float metronomeGain = 1f;
@@ -243,7 +244,7 @@ public sealed unsafe partial class AudioEngine : IAudioProcessor {
 
     /// <summary>
     ///     From a stop: a count-in of <paramref name="countIn" /> frames (if any) then recording; while playing: a
-    ///     punch-in.
+    ///     punch-in. <paramref name="beats" /> holds its clicks, and in its upper half how many make a bar.
     /// </summary>
     void Record(long countIn, long beats) {
         if (transport.State == TransportState.Playing) {
@@ -251,7 +252,8 @@ public sealed unsafe partial class AudioEngine : IAudioProcessor {
             BeginRecording();
         } else if (transport.State == TransportState.Stopped && countInRemaining == 0 && countIn > 0) {
             countInTotal = countInRemaining = countIn;
-            countInBeats = (int)Math.Clamp(beats, 1, 64);
+            countInBeats = Math.Clamp((int)(beats & int.MaxValue), 1, Metronome.MaxCountInBeats);
+            countInAccent = (int)(beats >> 32);
             Volatile.Write(ref recordStart, -1);
             transport.PrepareRecord();
         } else if (transport.State == TransportState.Stopped && countInRemaining == 0) {
@@ -420,7 +422,13 @@ public sealed unsafe partial class AudioEngine : IAudioProcessor {
         click.Clear();
         metronome.Begin();
         if (countIn) {
-            metronome.AddCountIn(countInTotal, countInBeats, countInTotal - countInRemaining, click.Length);
+            metronome.AddCountIn(
+                countInTotal,
+                countInBeats,
+                countInTotal - countInRemaining,
+                click.Length,
+                countInAccent
+            );
         } else if (transport.Rolling && Volatile.Read(ref metronomeEnabled)) {
             AddModelClicks(model, position, click.Length);
         }

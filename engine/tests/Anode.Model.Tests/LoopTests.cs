@@ -43,8 +43,10 @@ public sealed class LoopTests {
         var region = Audio();
         Apply(new SetRegionCommand(region, FadeIn: 100, FadeOut: 200, LoopTicks: 2 * Bar + Bar / 2));
         Assert.Equal(
-            [(0L, 0L, 96_000L, 100, 200), (96_000, 0, 96_000, 100, 200), (192_000, 0, 96_000, 100, 200),
-                (288_000, 0, 48_000, 100, 0)],
+            [
+                (0L, 0L, 96_000L, 100, 200), (96_000, 0, 96_000, 100, 200), (192_000, 0, 96_000, 100, 200),
+                (288_000, 0, 48_000, 100, 0)
+            ],
             Model().Tracks[0].Playlist.Select(static e => (e.Start, e.FileOffset, e.Length, e.FadeIn, e.FadeOut))
         );
     }
@@ -177,16 +179,25 @@ public sealed class LoopTests {
         Assert.Equal(3, state.MidiRegions.Count);
         var notes = state.MidiRegions.Values.SelectMany(static r => r.Notes).Select(static n => n.Id).ToArray();
         Assert.Equal(notes.Length, notes.Distinct().Count());
-        Assert.Equal([Bar, Bar, Bar / 2], state.MidiRegions.Values.OrderBy(static r => r.StartTick).Select(static r => r.LengthTicks));
+        Assert.Equal(
+            [Bar, Bar, Bar / 2],
+            state.MidiRegions.Values.OrderBy(static r => r.StartTick).Select(static r => r.LengthTicks)
+        );
     }
 
     [Fact]
     public void A_looped_region_is_not_split_or_joined() {
         var region = Audio();
-        var other = Audio(Bar, 96_000);
+        var other = Audio(Bar);
         Apply(new SetRegionCommand(region, LoopTicks: Bar));
-        Assert.Contains("loops", Assert.Throws<EditException>(() => Apply(new SplitRegionCommand(region, Bar / 2))).Message);
-        Assert.Contains("loops", Assert.Throws<EditException>(() => Apply(new JoinRegionsCommand([region, other]))).Message);
+        Assert.Contains(
+            "loops",
+            Assert.Throws<EditException>(() => Apply(new SplitRegionCommand(region, Bar / 2))).Message
+        );
+        Assert.Contains(
+            "loops",
+            Assert.Throws<EditException>(() => Apply(new JoinRegionsCommand([region, other]))).Message
+        );
     }
 
     [Fact]

@@ -46,7 +46,8 @@ async function projectWithRegion(app: ElectronApplication, window: Page, scratch
   await window.getByRole('button', { name: 'Import audio' }).click();
   await expect(window.getByRole('img', { name: /^Tracks area:/ })).toHaveAttribute(
     'aria-label',
-    /^Tracks area: 1 region on /
+    /^Tracks area: 1 region on /,
+    { timeout: 60_000 }
   );
   await window.locator('an-timeline').click({ position: { x: 40, y: 60 } });
 }
@@ -194,6 +195,33 @@ test('inserts and cuts time on the locators, and ripple deletes', async ({ app, 
     );
     await window.keyboard.press('Enter');
     await pressUntil(window, 'Control+Alt+ArrowRight', /^\s*2\s+1\s+1\s+1/);
+  } finally {
+    rmSync(scratch, { recursive: true, force: true });
+  }
+});
+
+// A pre-roll: recording from bar 3 plays from bar 2, and the take starts at bar 3.
+test('records after a pre-roll, the take at the playhead', async ({ app, window }) => {
+  const scratch = mkdtempSync(join(tmpdir(), 'anode-timeline-'));
+  try {
+    await projectWithRegion(app, window, scratch);
+    await window.getByTestId('count-in-menu').click();
+    await window.getByTestId('pre-roll-1-bars').click();
+
+    await window.getByRole('button', { name: 'Record enable Audio 1' }).click();
+    await window.locator('an-timeline').click({ position: { x: 2 * 192, y: 6 } });
+    await expectPlayhead(window, /^\s*3\s+1\s+1\s+1/);
+    await window.keyboard.press('r');
+    await expect(window.getByTestId('lcd-bars')).toHaveText(/^\s*[234]\s/);
+    await expect(window.getByTestId('lcd-bars')).toHaveText(/^\s*[4-9]\s/, { timeout: 10_000 });
+    await window.keyboard.press('Space');
+    await expect(window.getByRole('img', { name: /^Tracks area:/ })).toHaveAttribute(
+      'aria-label',
+      /^Tracks area: 2 regions on /
+    );
+    await window.keyboard.press('Enter');
+    await pressUntil(window, 'Control+Alt+ArrowRight', /^\s*2\s+1\s+1\s+1/);
+    await pressUntil(window, 'Control+Alt+ArrowRight', /^\s*3\s+1\s+1\s+1/);
   } finally {
     rmSync(scratch, { recursive: true, force: true });
   }

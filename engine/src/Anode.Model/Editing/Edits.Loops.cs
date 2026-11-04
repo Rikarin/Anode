@@ -56,9 +56,7 @@ public static partial class Edits {
                 foreach (var repeat in Loops.Played(state, midi).Skip(1)) {
                     var copy = Timeline.Copy(state, item, repeat.StartTick - midi.StartTick, null, ids, ref next);
                     var region = ((MidiRegionUpserted)copy).Region;
-                    ops.Add(
-                        new MidiRegionUpserted(region with { LengthTicks = repeat.LengthTicks, LoopTicks = 0 })
-                    );
+                    ops.Add(new MidiRegionUpserted(region with { LengthTicks = repeat.LengthTicks, LoopTicks = 0 }));
                 }
 
                 break;

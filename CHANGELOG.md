@@ -18,3 +18,5 @@ All notable changes to Anode are recorded here, by hand.
 - Insert and cut time, ripple edit: Insert Time (⌃⌘Z) and Cut Time (⌃⌘X) work on the marquee or the locators across every
   track, splitting what crosses them and moving tempo, signature, key and chord tracks, markers, sections, automation,
   score symbols, cycle and punch; the Ripple switch makes Delete and Cut close the gap on every track.
+- Pre-roll and count-in length: the control bar's menu sets the count-in in bars or beats and a pre-roll that starts
+  recording from a stop that far before the playhead, the take starting at the playhead. Project schema 14.
