@@ -71,11 +71,7 @@ static class ServeCommand {
 
         var plugins = Plugins(options, Print);
         // The sandboxes' deadline follows the device's period; on macOS they join its IO workgroup (null: none).
-        plugins.Host.ConfigureDevice(
-            device.SampleRate,
-            device.BufferFrames,
-            options.Flag("null-audio") ? null : options.Text("device") ?? string.Empty
-        );
+        plugins.Host.ConfigureDevice(device.SampleRate, device.BufferFrames, WorkgroupDevice(options));
         using var host = new EngineHost.EngineHost(
             device,
             version,
@@ -104,6 +100,15 @@ static class ServeCommand {
             context.Cancel = true;
             stop.Cancel();
         }
+    }
+
+    /// <summary>
+    ///     The uid whose IO workgroup the sandboxes join ('' for the default output), or null for none: the null device
+    ///     has none, and a pair of devices runs on a private aggregate that no uid names.
+    /// </summary>
+    static string? WorkgroupDevice(CommandLine options) {
+        var uid = options.Text("device") ?? string.Empty;
+        return options.Flag("null-audio") || uid.Contains('|', StringComparison.Ordinal) ? null : uid;
     }
 
     /// <summary>

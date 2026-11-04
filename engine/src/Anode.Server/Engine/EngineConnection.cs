@@ -530,7 +530,20 @@ public sealed partial class EngineConnection(
         device.Set(hello.SampleRate);
         Volatile.Write(ref masterTap, hello.MasterTapName);
         Set(
-            new(inProcess ? EngineState.InProcess : EngineState.Connected, hello.Version, hello.Backend, RateMismatch())
+            new(
+                inProcess ? EngineState.InProcess : EngineState.Connected,
+                hello.Version,
+                hello.Backend,
+                RateMismatch(),
+                new(
+                    hello.SampleRate,
+                    hello.BufferFrames,
+                    hello.InputChannels,
+                    hello.OutputChannels,
+                    hello.InputLatencyFrames,
+                    hello.OutputLatencyFrames
+                )
+            )
         );
         HostConnected?.Invoke();
         var reading = ReadAsync(stream, connection, stop.Token);

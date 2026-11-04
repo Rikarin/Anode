@@ -1,13 +1,15 @@
 import { ChangeDetectionStrategy, Component, inject } from '@angular/core';
 import { type ChannelFormat, SpeakerLayouts } from '@anode/api-client';
 import { XuiButtonImports } from '@xui/button';
+import { AudioDeviceSettings } from '../audio-device/audio-device-settings';
 import { Band, Field, selectValue } from '../control/styles';
 import { FloatingWindow } from '../shell/floating-window';
 import { UiStore } from '../state/ui.store';
 import { DeviceOutputs, type MonitoringMode, MonitoringStore } from './monitoring.store';
 
 /**
- * Settings… (the app menu's ⌘,; docs/11-phase-10.md): the user's settings, Phase 10's Audio ▸ Monitoring among them —
+ * Settings… (the app menu's ⌘,; docs/11-phase-10.md): the user's settings. Audio ▸ Devices is its own component; Phase
+ * 10's Audio ▸ Monitoring is here —
  * how the master reaches the device: its speakers as they are, a down-mix (ITU-R BS.775) to a smaller layout, or
  * binaural for headphones (to outputs 1–2); and the speaker map, each channel of what is sent to a device output (or
  * not sent). Monitoring never changes a bounce. Each change is saved at once (`PUT /settings/monitoring`).
@@ -16,7 +18,7 @@ import { DeviceOutputs, type MonitoringMode, MonitoringStore } from './monitorin
 @Component({
   selector: 'an-settings-window',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [FloatingWindow, XuiButtonImports],
+  imports: [AudioDeviceSettings, FloatingWindow, XuiButtonImports],
   template: `
     <an-floating-window
       title="Settings"
@@ -25,6 +27,7 @@ import { DeviceOutputs, type MonitoringMode, MonitoringStore } from './monitorin
       [origin]="{ x: 260, y: 96 }"
       (closed)="ui.settingsOpen.set(false)"
     >
+      <an-audio-device-settings />
       <h3 [class]="band">Audio ▸ Monitoring</h3>
       <div class="flex flex-col gap-3 p-3 text-xs">
         <div

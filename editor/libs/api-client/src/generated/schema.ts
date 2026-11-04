@@ -5168,18 +5168,38 @@ export interface components {
       type: 'unfreezeTrack';
       trackId: string;
     };
+    /**
+     * @description The stream the engine host has open, as the device settled on it (it may differ from what was asked for). The
+     *     latencies are in frames, as the driver reports them for the open stream with the buffer included; 0 on the null
+     *     backend, which has no device, and for inputs when none are open.
+     */
+    EngineAudio: {
+      /** Format: int32 */
+      sampleRate: number;
+      /** Format: int32 */
+      bufferFrames: number;
+      /** Format: int32 */
+      inputChannels: number;
+      /** Format: int32 */
+      outputChannels: number;
+      /** Format: int32 */
+      inputLatencyFrames: number;
+      /** Format: int32 */
+      outputLatencyFrames: number;
+    };
     /** @enum {unknown} */
     EngineState: 'disconnected' | 'connected' | 'inprocess';
     /**
      * @description The server's link to the engine host: whether it is reachable (`state`), the host's version and audio
      *     backend (`coreaudio`, `wasapi`, `alsa`, `null`) from its hello while connected, and why the
-     *     link is down when it is (`message`).
+     *     link is down when it is (`message`). `audio` is the device the host runs while connected, else null.
      */
     EngineStatus: {
       state: components['schemas']['EngineState'];
       hostVersion?: null | string;
       backend?: null | string;
       message?: null | string;
+      audio: null | components['schemas']['EngineAudio'];
     };
     /**
      * @description A cable from outlet `outlet` of an object to inlet `inlet` of another (0-based, as the kind lists

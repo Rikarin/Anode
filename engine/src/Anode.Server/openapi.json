@@ -14889,6 +14889,44 @@
         },
         "description": "Plays a frozen track live again (its freeze file stays in the project\u0027s audio)."
       },
+      "EngineAudio": {
+        "required": [
+          "sampleRate",
+          "bufferFrames",
+          "inputChannels",
+          "outputChannels",
+          "inputLatencyFrames",
+          "outputLatencyFrames"
+        ],
+        "type": "object",
+        "properties": {
+          "sampleRate": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "bufferFrames": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "inputChannels": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "outputChannels": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "inputLatencyFrames": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "outputLatencyFrames": {
+            "type": "integer",
+            "format": "int32"
+          }
+        },
+        "description": "The stream the engine host has open, as the device settled on it (it may differ from what was asked for). The\nlatencies are in frames, as the driver reports them for the open stream with the buffer included; 0 on the null\nbackend, which has no device, and for inputs when none are open."
+      },
       "EngineState": {
         "enum": [
           "disconnected",
@@ -14898,7 +14936,8 @@
       },
       "EngineStatus": {
         "required": [
-          "state"
+          "state",
+          "audio"
         ],
         "type": "object",
         "properties": {
@@ -14922,9 +14961,19 @@
               "null",
               "string"
             ]
+          },
+          "audio": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/EngineAudio"
+              }
+            ]
           }
         },
-        "description": "The server\u0027s link to the engine host: whether it is reachable (\u0060state\u0060), the host\u0027s version and audio\nbackend (\u0060coreaudio\u0060, \u0060wasapi\u0060, \u0060alsa\u0060, \u0060null\u0060) from its hello while connected, and why the\nlink is down when it is (\u0060message\u0060)."
+        "description": "The server\u0027s link to the engine host: whether it is reachable (\u0060state\u0060), the host\u0027s version and audio\nbackend (\u0060coreaudio\u0060, \u0060wasapi\u0060, \u0060alsa\u0060, \u0060null\u0060) from its hello while connected, and why the\nlink is down when it is (\u0060message\u0060). \u0060audio\u0060 is the device the host runs while connected, else null."
       },
       "EnvironmentCable": {
         "required": [

@@ -431,8 +431,10 @@ popup (audio tracks and auxes only; disabled with an `xuiTooltip` on `[attr.disa
 strip goes to the master of a surround project). The meter is the multichannel meter.
 
 **Settings windows.** Project Settings ▸ Surround is a radiogroup of 44 px rows (a speaker diagram, the name in 13 px
-semibold, channels and BS.2051 name in muted `readout`; the selected row `bg-primary/25`). Settings ▸ Audio ▸
-Monitoring is a Speakers/Down-mix/Binaural `bezel-group` radiogroup with a muted note, a down-mix select, and a Speaker
+semibold, channels and BS.2051 name in muted `readout`; the selected row `bg-primary/25`). Settings ▸ Audio ▸ Devices
+is a two-column grid of muted labels and native selects (`Field`), an xUI Apply button with Revert and a muted note
+beside it, a `text-error` `role="status"` line when a switch fails, and below a `dl` of what runs, in `readout`.
+Settings ▸ Audio ▸ Monitoring is a Speakers/Down-mix/Binaural `bezel-group` radiogroup with a muted note, a down-mix select, and a Speaker
 Map table of native selects under 10 px uppercase heads.
 
 **Movie window** (`video/movie-window.ts`, an `an-floating-window`): the title is the movie's name; the size is a

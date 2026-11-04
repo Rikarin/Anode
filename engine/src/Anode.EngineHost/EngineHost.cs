@@ -143,7 +143,9 @@ public sealed class EngineHost : IDisposable {
             device.InputChannels,
             device.OutputChannels,
             telemetryName,
-            tapName
+            tapName,
+            latency.Input,
+            latency.Output
         );
     }
 

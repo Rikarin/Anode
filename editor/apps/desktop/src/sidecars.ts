@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { type Command, engine } from './engine';
 import { portFree } from './network';
-import type { AudioSettings, NetworkSettings } from './settings';
+import type { AudioApplied, AudioSettings, NetworkSettings } from './settings';
 
 export interface SidecarStatus {
   name: 'host' | 'server';
@@ -24,6 +24,20 @@ const MaxBackoffMs = 10_000;
 const ReadyTimeoutMs = 60_000;
 /** The host's GC budget (docs/adr/0001-process-model.md): NativeAOT reads it from the environment only, as hex. */
 const Gen0Budget = '10000000';
+/** How long a host on new audio settings has to say it serves. */
+const HostReadyTimeoutMs = 30_000;
+/**
+ * How long it must then stay up: a device that opens but never calls back is reported lost by the host's watchdog,
+ * after its readiness line (NativeAudioSession.CallbackStall, 2 s, polled every 250 ms).
+ */
+const HostSettleMs = 3_000;
+
+/** A start being tried: not supervised until it proves itself, so a failure is reported, not retried. */
+interface Trial {
+  timer: NodeJS.Timeout;
+  serving(): void;
+  ended(reason: string): void;
+}
 
 /**
  * One supervised child process: started with a command line computed at each (re)start, restarted with backoff
@@ -35,6 +49,7 @@ class Sidecar {
   private wanted = false;
   private failures = 0;
   private restartTimer: NodeJS.Timeout | null = null;
+  private trial: Trial | null = null;
   readonly log: string[] = [];
   status: SidecarStatus;
 
@@ -56,6 +71,40 @@ class Sidecar {
     }
 
     this.launch();
+  }
+
+  /**
+   * Starts the stopped process for one try. Resolves once it has said it serves and is still running `settleMs` later,
+   * and it is supervised from then on. Rejects with its reason, leaving it stopped, when it ends first or does not
+   * serve within `readyMs`.
+   */
+  startChecked(readyMs: number, settleMs: number): Promise<void> {
+    return new Promise((done, fail) => {
+      const finish = (error?: Error) => {
+        clearTimeout(trial.timer);
+        this.trial = null;
+        if (error) {
+          this.wanted = false;
+          fail(error);
+        } else {
+          done();
+        }
+      };
+      const trial: Trial = {
+        timer: setTimeout(() => {
+          finish(new Error(`The engine did not start within ${readyMs / 1000} s.`));
+          void this.stop();
+        }, readyMs),
+        serving: () => {
+          clearTimeout(trial.timer);
+          trial.timer = setTimeout(() => finish(), settleMs);
+        },
+        ended: reason => finish(new Error(reason))
+      };
+      this.trial = trial;
+      this.wanted = true;
+      this.launch();
+    });
   }
 
   /** Whether the process runs now. */
@@ -101,6 +150,7 @@ class Sidecar {
       command = this.commandLine();
     } catch (error) {
       this.set('failed', (error as Error).message);
+      this.trial?.ended((error as Error).message);
       return;
     }
 
@@ -114,13 +164,16 @@ class Sidecar {
     this.child = child;
     this.set(this.failures === 0 ? 'starting' : 'restarting', null);
     child.stdin.on('error', () => undefined); // a child that already exited: nothing to tell it
+    let lastError: string | null = null;
     const keep = (data: Buffer) => {
       const lines = data.toString().split('\n').filter(Boolean);
+      lastError = lines.findLast(line => line.startsWith('error: '))?.slice('error: '.length) ?? lastError;
       this.log.push(...lines);
       this.log.splice(0, Math.max(0, this.log.length - 200));
       const waiting = this.status.state === 'starting' || this.status.state === 'restarting';
       if (this.child === child && waiting && lines.some(line => this.ready.test(line))) {
         this.set('running', null);
+        this.trial?.serving();
       }
     };
     child.stdout.on('data', keep);
@@ -131,6 +184,18 @@ class Sidecar {
       }
 
       this.child = null;
+      const trial = this.trial;
+      if (trial) {
+        // The exit can overtake the last of its output, and that holds the reason.
+        clearTimeout(trial.timer);
+        void streamsClosed(child).then(() => {
+          const reason = lastError ?? `The engine exited (${code}).`;
+          this.set('failed', reason);
+          trial.ended(reason);
+        });
+        return;
+      }
+
       if (!this.wanted) {
         return;
       }
@@ -167,6 +232,8 @@ export class Sidecars {
   private ready: Promise<Connection> | null = null;
   /** The host's exclusive jobs (a restart with new audio settings), one at a time: each stops and restarts it. */
   private hostJobs: Promise<unknown> = Promise.resolve();
+  /** Stopping for good: a switch this interrupts must not start a host again. */
+  private stopping = false;
   private readonly host: Sidecar;
   private readonly server: Sidecar;
   /** Why the Server is not on the network although the setting asks for it, or null. */
@@ -194,6 +261,7 @@ export class Sidecars {
 
   /** Starts both processes; resolves with the connection once the Server answers. */
   start(): Promise<Connection> {
+    this.stopping = false;
     this.ready ??= (async () => {
       // A retry after a slow first start finds the Server still starting: it keeps its port and is not started twice.
       if (this.port === 0 || !this.server.running) {
@@ -251,18 +319,47 @@ export class Sidecars {
   }
 
   async stop(): Promise<void> {
+    this.stopping = true;
     await Promise.all([this.server.stop(), this.host.stop()]);
     this.ready = null;
   }
 
-  /** Restarts only the engine host with new audio settings; the Server reconnects and resends the project. */
-  applyAudio(audio: AudioSettings): Promise<void> {
-    return this.exclusive(async () => {
+  /**
+   * Restarts only the engine host with new audio settings; the Server reconnects and resends the project. Two hosts
+   * never run side by side to try a device first: one changing a device's rate or buffer would disturb the other. A
+   * host that fails on the new settings (a device that cannot open, a rate it refuses) is replaced by one on the
+   * previous settings, which stay the ones to use.
+   */
+  applyAudio(audio: AudioSettings): Promise<AudioApplied> {
+    return this.exclusive(async (): Promise<AudioApplied> => {
+      const previous = this.audio;
       this.audio = audio;
       await this.host.stop();
-      this.host.start();
-      this.host.healthy();
+      try {
+        await this.host.startChecked(HostReadyTimeoutMs, HostSettleMs);
+        this.host.healthy();
+        return { applied: true };
+      } catch (failure) {
+        this.audio = previous;
+        return { applied: false, error: (failure as Error).message, restored: await this.restoreHost() };
+      }
     });
+  }
+
+  /** Starts the host on the settings it has; if they fail too, its supervision keeps trying them. */
+  private async restoreHost(): Promise<boolean> {
+    if (this.stopping) {
+      return false;
+    }
+
+    try {
+      await this.host.startChecked(HostReadyTimeoutMs, 0);
+      this.host.healthy();
+      return true;
+    } catch {
+      this.host.start();
+      return false;
+    }
   }
 
   /** Runs `job` after the host's other jobs: two of them overlapping would each restart the host, starting two. */
@@ -274,7 +371,6 @@ export class Sidecars {
 
   private hostCommand(): Command & { env: NodeJS.ProcessEnv } {
     const host = engine.host();
-    const audio = this.audio.device ? ['--device', this.audio.device] : ['--null-audio'];
     // End-to-end tests (and machines without MIDI ports): a virtual MIDI input and output instead of the OS's.
     const midi = process.env['ANODE_VIRTUAL_MIDI'] === '1' ? ['--virtual-midi'] : [];
     return {
@@ -285,7 +381,7 @@ export class Sidecars {
         '--socket',
         this.socket,
         '--watch-stdin',
-        ...audio,
+        ...deviceArguments(this.audio),
         ...midi,
         // The plugin scan's cache and blocklist go to the same data folder as the Server's.
         ...(this.dataDirectory ? ['--data-dir', this.dataDirectory] : []),
@@ -337,6 +433,24 @@ export function listDevices(): Promise<{ backend: string; devices: unknown[] }> 
       }
     })
   );
+}
+
+/** The host's device options: `--device <output>|<input>` pairs an input device with the output (cth_audio). */
+function deviceArguments({ device, inputDevice }: AudioSettings): string[] {
+  if (device === null) {
+    return ['--null-audio'];
+  }
+
+  const uid = inputDevice && inputDevice !== device ? `${device}|${inputDevice}` : device;
+  return [...(uid ? ['--device', uid] : []), ...(inputDevice === '' ? ['--inputs', '0'] : [])];
+}
+
+/** Resolves once the child's output has ended, or shortly after its exit if something it started holds it open. */
+function streamsClosed(child: ChildProcess): Promise<void> {
+  return new Promise(done => {
+    child.once('close', () => done());
+    setTimeout(done, 250);
+  });
 }
 
 function freePort(): Promise<number> {

@@ -72,7 +72,8 @@ public abstract record IpcMessage;
 ///     The first message each side sends. The server's carries only its version; the host answers with its own, its
 ///     audio backend, the device it runs (rate, buffer, channels), the name of its telemetry region and (Phase 10) the
 ///     name of its master tap ring (<see cref="Segments.MasterTapHeader" />, created with the telemetry region, written
-///     while <see cref="SetMasterTapMessage" /> has it on).
+///     while <see cref="SetMasterTapMessage" /> has it on). The latencies are what the open device reports, the buffer
+///     included (0 on the null device, and for inputs when none are open).
 /// </summary>
 public sealed record HelloMessage(
     string Version,
@@ -82,7 +83,9 @@ public sealed record HelloMessage(
     int InputChannels = 0,
     int OutputChannels = 0,
     string? TelemetryName = null,
-    string? MasterTapName = null
+    string? MasterTapName = null,
+    int InputLatencyFrames = 0,
+    int OutputLatencyFrames = 0
 ) : IpcMessage;
 
 public sealed record PingMessage(long Id) : IpcMessage;

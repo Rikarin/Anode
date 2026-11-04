@@ -15,7 +15,14 @@ import { writeFile } from 'node:fs/promises';
 import { extname, isAbsolute, join, normalize, resolve, sep } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { networkStatus, newToken, portFree } from './network';
-import { type AudioSettings, type NetworkSettings, type ServerTarget, loadSettings, saveSettings } from './settings';
+import {
+  type AudioApplied,
+  type AudioSettings,
+  type NetworkSettings,
+  type ServerTarget,
+  loadSettings,
+  saveSettings
+} from './settings';
 import { type Connection, Sidecars, listDevices, waitForServer } from './sidecars';
 
 // Anode desktop: the editor in a sandboxed window, and the engine (anode-host + anode-server) as supervised sidecars on
@@ -359,10 +366,20 @@ function handleIpc(): void {
   ipcMain.handle('anode:sidecars:logs', () => sidecars?.logs() ?? { host: [], server: [] });
   ipcMain.handle('anode:audio:devices', () => listDevices());
   ipcMain.handle('anode:audio:settings', () => settings.audio);
-  ipcMain.handle('anode:audio:apply', async (_event, audio: unknown) => {
-    settings = { ...settings, audio: validAudio(audio) };
-    saveSettings(settings);
-    await sidecars?.applyAudio(settings.audio);
+  ipcMain.handle('anode:audio:apply', async (_event, audio: unknown): Promise<AudioApplied> => {
+    const next = validAudio(audio);
+    if (settings.target.mode === 'remote') {
+      return { applied: false, error: "This window uses a remote Server, not this computer's engine.", restored: true };
+    }
+
+    // Saved only once it works: a device that cannot open must not be what the next start tries.
+    const result = (await sidecars?.applyAudio(next)) ?? { applied: true };
+    if (result.applied) {
+      settings = { ...settings, audio: next };
+      saveSettings(settings);
+    }
+
+    return result;
   });
   ipcMain.handle('anode:network:status', () => networkStatus(settings.network, sidecars?.networkError ?? null));
   ipcMain.handle('anode:network:apply', async (_event, network: unknown) => {
@@ -515,10 +532,12 @@ function validAudio(value: unknown): AudioSettings {
   const audio: Unchecked<AudioSettings> = fields(value);
   const oneOf = (option: unknown, options: readonly number[], fallback: number) =>
     options.find(o => o === option) ?? fallback;
-  const device = typeof audio.device === 'string' && audio.device.length < 512 ? audio.device : null;
+  // A uid with a bar would read as a pair of devices, and one with dashes as a host option.
+  const uid = (value: unknown) =>
+    typeof value === 'string' && value.length < 512 && !value.includes('|') && !value.startsWith('--') ? value : null;
   const sampleRate = oneOf(audio.sampleRate, [44_100, 48_000, 88_200, 96_000, 176_400, 192_000], 48_000);
   const bufferFrames = oneOf(audio.bufferFrames, [32, 64, 128, 256, 512, 1024], 128);
-  return { device, sampleRate, bufferFrames };
+  return { device: uid(audio.device), inputDevice: uid(audio.inputDevice), sampleRate, bufferFrames };
 }
 
 /** What the renderer asks for: on or off, the port, and optionally a new token. */
