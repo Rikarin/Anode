@@ -66,7 +66,9 @@ public static class BuiltinEffects {
         Expander.Info,
         FrequencySpread.Info,
         Scope.Info,
-        PhaseMeter.Info
+        PhaseMeter.Info,
+        Vocoder.Info,
+        VoiceShaper.Info
     ];
 
     /// <summary>
@@ -122,6 +124,8 @@ public static class BuiltinEffects {
             FrequencySpread.Id => new FrequencySpread(),
             Scope.Id => new Scope(),
             PhaseMeter.Id => new PhaseMeter(),
+            Vocoder.Id => new Vocoder(),
+            VoiceShaper.Id => new VoiceShaper(),
             _ => null
         };
 }

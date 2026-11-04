@@ -21,7 +21,13 @@ function pick(id: string, name: string, names: readonly string[], value = 0): Pa
 
 const toggle = (id: string, name: string, on = false) => pick(id, name, ['Off', 'On'], on ? 1 : 0);
 
-function effect(id: string, name: string, category: string, parameters: ParameterInfo[]): PluginInfo {
+function effect(
+  id: string,
+  name: string,
+  category: string,
+  parameters: ParameterInfo[],
+  hasSidechain = false
+): PluginInfo {
   return {
     id,
     name,
@@ -32,7 +38,7 @@ function effect(id: string, name: string, category: string, parameters: Paramete
     fileTypes: [],
     parameters,
     category,
-    hasSidechain: false,
+    hasSidechain,
     hasEditor: false
   };
 }
@@ -74,5 +80,37 @@ export const FakeParityEffects: readonly PluginInfo[] = [
     pick('trigger', 'Trigger', ['Free', 'Rising', 'Falling'], 1),
     p('level', 'Trigger Level', -1, 1, 0)
   ]),
-  effect('anode.phase-meter', 'Phase Meter', 'Metering', [p('integration', 'Integration', 50, 3_000, 300, 'ms')])
+  effect('anode.phase-meter', 'Phase Meter', 'Metering', [p('integration', 'Integration', 50, 3_000, 300, 'ms')]),
+  effect(
+    'anode.vocoder',
+    'Vocoder',
+    'Specialized',
+    [
+      pick('source', 'Source', ['Synth', 'Side Chain Carrier', 'Side Chain Voice']),
+      { ...p('bands', 'Bands', 4, 32, 20), steps: 28 },
+      p('low', 'Low', 50, 1_000, 100, 'Hz'),
+      p('high', 'High', 1_000, 16_000, 8_000, 'Hz'),
+      p('formant', 'Formant', -12, 12, 0, 'st'),
+      p('sharpness', 'Sharpness', 0.5, 4, 1),
+      p('attack', 'Attack', 0.5, 100, 4, 'ms'),
+      p('release', 'Release', 5, 1_000, 40, 'ms'),
+      { ...p('note', 'Note', 24, 84, 48), steps: 60 },
+      p('sibilance', 'Sibilance', 0, 100, 25, '%'),
+      p('level', 'Level', -24, 24, 0, 'dB'),
+      p('mix', 'Mix', 0, 100, 100, '%')
+    ],
+    true
+  ),
+  effect(
+    'anode.voice-shaper',
+    'Voice Shaper',
+    'Pitch',
+    [
+      p('pitch', 'Pitch', -24, 24, 0, 'st'),
+      p('formant', 'Formant', -12, 12, 0, 'st'),
+      pick('target', 'Target', ['Pitch', 'Side Chain']),
+      p('mix', 'Mix', 0, 100, 100, '%')
+    ],
+    true
+  )
 ];

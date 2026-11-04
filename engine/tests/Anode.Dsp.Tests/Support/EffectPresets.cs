@@ -48,6 +48,8 @@ public static class EffectPresets {
                 (LinearPhaseEq.Peak2Gain, -4), (LinearPhaseEq.Peak2Q, 2), (LinearPhaseEq.Peak3Gain, 3),
                 (LinearPhaseEq.HighShelfGain, 4)
             ],
+            Vocoder.Id => [(Vocoder.Bands, 16), (Vocoder.Level, 6)],
+            VoiceShaper.Id => [(VoiceShaper.Semitones, 5), (VoiceShaper.Formant, 3), (VoiceShaper.Mix, 70)],
             Expander.Id => [(Expander.Threshold, -24), (Expander.Ratio, 3)],
             TestOscillator.Id => [(TestOscillator.Wave, TestOscillator.Sawtooth), (TestOscillator.Frequency, 220)],
             FrequencySpread.Id => [(FrequencySpread.Width, 70), (FrequencySpread.Output, -4)],

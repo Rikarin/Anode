@@ -5,6 +5,7 @@ import { PhysicalModelPanel } from './physical-model-panel';
 import type { DeferredPanelKind, PluginPanelHost } from './plugin-panel';
 import { SampleAlchemyPanel } from './sample-alchemy-panel';
 import { ExpanderPanel, OscillatorPanel, SpreadPanel } from './utility-panels';
+import { VocoderPanel, VoiceShaperPanel } from './voice-panels';
 
 /**
  * The custom panels the plugin window loads with `@defer`, so none is in the initial bundle: the T3 instruments'
@@ -23,7 +24,9 @@ import { ExpanderPanel, OscillatorPanel, SpreadPanel } from './utility-panels';
     SampleAlchemyPanel,
     ScopePanel,
     SpreadPanel,
-    TunerPanel
+    TunerPanel,
+    VocoderPanel,
+    VoiceShaperPanel
   ],
   host: { class: 'contents' },
   template: `
@@ -54,6 +57,12 @@ import { ExpanderPanel, OscillatorPanel, SpreadPanel } from './utility-panels';
       }
       @case ('frequencySpread') {
         <an-spread-panel [host]="host()" />
+      }
+      @case ('vocoder') {
+        <an-vocoder-panel [host]="host()" />
+      }
+      @case ('voiceShaper') {
+        <an-voice-shaper-panel [host]="host()" />
       }
     }
   `

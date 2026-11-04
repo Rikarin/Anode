@@ -4189,7 +4189,9 @@ export class FakeAnodeServer implements AnodeApi {
           case 'anode.expander':
           case 'anode.frequency-spread':
           case 'anode.scope':
-          case 'anode.phase-meter': {
+          case 'anode.phase-meter':
+          case 'anode.vocoder':
+          case 'anode.voice-shaper': {
             const shown = fakeDisplay(insert, level, this.positionTick, this.fakeDefaults(insert));
             readings.push({
               trackId,

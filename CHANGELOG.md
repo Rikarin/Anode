@@ -17,3 +17,5 @@ All notable changes to Anode are recorded here, by hand.
   correlation, not LUFS.
 - Channel EQ: any band can work on the mid or the side alone, and a bell or shelf can be dynamic, its gain following its
   own band's level. Older projects and states load with both off and sound the same.
+- Vocoder (a channel vocoder with its own carrier, or either side of it on the sidechain) and Voice Shaper (a monophonic
+  voice's pitch and formants moved apart, or its pitch taken from the sidechain), each with its panel.

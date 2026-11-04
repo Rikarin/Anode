@@ -16,6 +16,8 @@ export type PanelKind =
   | 'expander'
   | 'testOscillator'
   | 'frequencySpread'
+  | 'vocoder'
+  | 'voiceShaper'
   // Phase 11 (docs/12-phase-11.md): the physical model's object and pickups, Sample Alchemy's source view.
   | 'physicalModel'
   | 'sampleAlchemy';
@@ -155,6 +157,8 @@ export const PanelPatterns: readonly PanelPattern[] = [
   ownPanel('expander', 'anode.expander'),
   ownPanel('testOscillator', 'anode.test-oscillator'),
   ownPanel('frequencySpread', 'anode.frequency-spread'),
+  ownPanel('vocoder', 'anode.vocoder'),
+  ownPanel('voiceShaper', 'anode.voice-shaper'),
   {
     kind: 'physicalModel',
     roles: {

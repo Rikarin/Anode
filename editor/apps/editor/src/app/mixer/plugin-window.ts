@@ -41,6 +41,8 @@ export interface ReadingKind {
   max: number;
   label: string;
   unit: string;
+  /** The plugin's panel shows it better: no bar over it. */
+  hidden?: boolean;
 }
 
 const Correlation: ReadingKind = { kind: 'level', min: -1, max: 1, label: 'Correlation', unit: '' };
@@ -50,7 +52,9 @@ const OwnReadings: Readonly<Record<string, ReadingKind>> = {
   'anode.loudness-meter': { kind: 'level', min: -60, max: 0, label: 'Loudness', unit: 'LUFS' },
   'anode.multimeter': Correlation,
   'anode.phase-meter': Correlation,
-  'anode.tuner': { kind: 'level', min: -50, max: 50, label: 'Offset', unit: 'ct' }
+  'anode.tuner': { kind: 'level', min: -50, max: 50, label: 'Offset', unit: 'ct', hidden: true },
+  'anode.pitch-correction': { kind: 'level', min: -100, max: 100, label: 'Correction', unit: 'ct' },
+  'anode.voice-shaper': { kind: 'level', min: 0, max: 1_000, label: 'Pitch', unit: 'Hz' }
 };
 
 /** The reading a plugin shows: gain reduction for dynamics, a meter's own, a level otherwise. */
@@ -133,7 +137,7 @@ export function readingKind(plugin: PluginInfo | undefined): ReadingKind {
     </div>
     @if (insert(); as i) {
       <div class="flex min-h-0 flex-col gap-3 overflow-y-auto p-3" [attr.data-testid]="'plugin-window-' + i.pluginId">
-        @if (reading() !== null) {
+        @if (reading() !== null && !readingInfo().hidden) {
           <an-reading-meter
             class="w-full"
             [label]="readingInfo().label"
@@ -267,7 +271,8 @@ export class PluginWindowView {
       value: id => this.mixer.parameterValue(this.window().trackId, insert, id),
       set: (id, value) => void this.mixer.setParameter(this.window().trackId, insert.id, id, value),
       readingValues: () => this.readingValues(),
-      sampleRate: this.project.info()?.sampleRate
+      sampleRate: this.project.info()?.sampleRate,
+      sidechain: insert.sidechain ?? null
     };
   });
   protected readonly groups = computed(() => parameterGroups(this.plugin()?.parameters ?? []));

@@ -7,6 +7,7 @@ import { goniometerPoints, noteName, PhasePanel, ScopePanel, tracePoints, TunerP
 import { matchPanel } from './panel-patterns';
 import { deferredPanel, type PluginPanelHost } from './plugin-panel';
 import { expanderGain, ExpanderPanel, OscillatorPanel, spreadBands, SpreadPanel, waveCycle } from './utility-panels';
+import { bandHeight, padToShape, shapeOnPad, sidechainHint, VocoderPanel, VoiceShaperPanel } from './voice-panels';
 
 const fake = (id: string): PluginInfo => FakeParityEffects.find(p => p.id === id) as PluginInfo;
 
@@ -38,7 +39,9 @@ describe('The utility panels', () => {
       ['anode.phase-meter', 'phaseMeter'],
       ['anode.expander', 'expander'],
       ['anode.test-oscillator', 'testOscillator'],
-      ['anode.frequency-spread', 'frequencySpread']
+      ['anode.frequency-spread', 'frequencySpread'],
+      ['anode.vocoder', 'vocoder'],
+      ['anode.voice-shaper', 'voiceShaper']
     ];
     for (const [id, kind] of kinds) {
       expect(matchPanel(fake(id))?.kind).toBe(kind);
@@ -48,9 +51,10 @@ describe('The utility panels', () => {
 
   it('reads each meter on its own scale', () => {
     expect(readingKind(fake('anode.phase-meter'))).toMatchObject({ min: -1, max: 1, label: 'Correlation', unit: '' });
-    expect(readingKind(fake('anode.tuner'))).toMatchObject({ min: -50, max: 50, unit: 'ct' });
+    expect(readingKind(fake('anode.tuner')).hidden).toBe(true); // its panel shows it
     expect(readingKind(fake('anode.scope'))).toMatchObject({ label: 'Level', unit: 'dB' });
     expect(readingKind(fake('anode.expander'))).toMatchObject({ kind: 'reduction' });
+    expect(readingKind(fake('anode.voice-shaper'))).toMatchObject({ unit: 'Hz' });
   });
 
   it('Tuner: note, needle and offset', async () => {
@@ -91,7 +95,6 @@ describe('The utility panels', () => {
     expect(goniometerPoints([1, 0, Math.SQRT2, 0], 200)).toEqual([{ x: 200, y: 100 }]);
     const { element, live, fixture } = await render(PhasePanel, fake('anode.phase-meter'), [-0.5, 3, 0, 0, 0.1, 0.1]);
     expect(element.querySelectorAll('[data-testid="goniometer-point"]')).toHaveLength(2);
-    expect(element.querySelector('an-reading-meter')?.getAttribute('aria-valuetext')).toBe('−0.5');
     expect(element.querySelector('[data-testid="phase-balance"]')?.textContent).toContain('3.0 dB right');
     live.set([1, 0]);
     await fixture.whenStable();
@@ -139,5 +142,44 @@ describe('The utility panels', () => {
     values.update(v => ({ ...v, bands: 3 }));
     await fixture.whenStable();
     expect(element.querySelectorAll('[data-side="R"]')).toHaveLength(1);
+  });
+
+  it('Vocoder: a bar per band, and says what a sidechain source needs', async () => {
+    expect(bandHeight(0)).toBe(100);
+    expect(bandHeight(-30)).toBe(50);
+    expect(bandHeight(-120)).toBe(0);
+    expect(fake('anode.vocoder').hasSidechain).toBe(true);
+    const { element, live, values, fixture } = await render(VocoderPanel, fake('anode.vocoder'));
+    expect(element.querySelector('[data-testid="vocoder-hint"]')).toBeNull();
+    live.set([-6, -30, -90]);
+    values.update(v => ({ ...v, source: 1 }));
+    await fixture.whenStable();
+    const bars = element.querySelectorAll<HTMLElement>('[data-testid="vocoder-band"]');
+    expect([...bars].map(bar => bar.style.height)).toEqual(['90%', '50%', '0%']);
+    expect(element.querySelector('[data-testid="vocoder-hint"]')?.textContent).toContain('carrier');
+    expect(sidechainHint(2, null)).toContain('voice');
+    expect(sidechainHint(2, 'trk_1')).toBeNull();
+    expect(sidechainHint(0, null)).toBeNull();
+  });
+
+  it('Voice Shaper: pitch and formant on one pad, with what it hears', async () => {
+    expect(shapeOnPad(0, 0)).toEqual({ x: 0.5, y: 0.5 });
+    expect(shapeOnPad(24, -12)).toEqual({ x: 1, y: 0 });
+    expect(padToShape({ x: 0.75, y: 0.25 })).toEqual({ pitch: 12, formant: -6 });
+    expect(fake('anode.voice-shaper').hasSidechain).toBe(true);
+    const { element, live, sets, fixture } = await render(VoiceShaperPanel, fake('anode.voice-shaper'), [0, 0, 0]);
+    const text = (id: string) => element.querySelector(`[data-testid="${id}"]`)?.textContent.trim();
+    expect(text('voice-heard')).toBe('No pitch');
+    expect(text('voice-shift')).toBe('0.0 st');
+    expect(element.querySelector('[data-testid="voice-reference"]')).toBeNull();
+    live.set([220, 702, 330]);
+    await fixture.whenStable();
+    expect(text('voice-heard')).toBe('220.0 Hz');
+    expect(text('voice-shift')).toBe('+7.0 st');
+    expect(text('voice-reference')).toBe('330.0 Hz');
+    const pad = element.querySelector('[role="slider"]') as HTMLElement;
+    pad.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true }));
+    await fixture.whenStable();
+    expect(sets).toEqual([['pitch', 2.4]]);
   });
 });

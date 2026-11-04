@@ -104,6 +104,17 @@ export function fakeDisplay(
     }
     case 'anode.test-oscillator':
       return { value: parameter('level'), values: null };
+    case 'anode.vocoder': {
+      const bands = Math.round(parameter('bands'));
+      const levels = Array.from({ length: bands }, (_, band) =>
+        Math.max(silence, db - 6 - (24 * band) / bands + 6 * Math.sin(band + tick / 240))
+      );
+      return { value: Math.max(silence, db), values: levels };
+    }
+    case 'anode.voice-shaper':
+      return level > 0
+        ? { value: 180, values: [180, parameter('pitch') * 100, 0] }
+        : { value: 0, values: [0, parameter('pitch') * 100, 0] };
     default:
       return { value: Math.max(silence, db), values: null };
   }

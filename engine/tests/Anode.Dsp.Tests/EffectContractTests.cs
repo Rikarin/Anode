@@ -30,7 +30,7 @@ public sealed class EffectContractTests {
         "anode.saturation", "anode.mastering-assistant",
         // The parity effects of docs/effects/parity.md.
         "anode.tuner", "anode.test-oscillator", "anode.expander", "anode.frequency-spread", "anode.scope",
-        "anode.phase-meter"
+        "anode.phase-meter", "anode.vocoder", "anode.voice-shaper"
     ];
 
     [Fact]
@@ -78,7 +78,9 @@ public sealed class EffectContractTests {
 
         Assert.True(Compressor.Info.HasSidechain);
         Assert.True(NoiseGate.Info.HasSidechain);
-        Assert.Equal(2, BuiltinEffects.All.Count(static d => d.HasSidechain));
+        Assert.True(Effects.Specialized.Vocoder.Info.HasSidechain);
+        Assert.True(Effects.Pitch.VoiceShaper.Info.HasSidechain);
+        Assert.Equal(4, BuiltinEffects.All.Count(static d => d.HasSidechain));
     }
 
     [Theory]

@@ -16,6 +16,8 @@ export interface PluginPanelHost {
   set(parameterId: string, value: number): void;
   /** What the insert shows beyond its reading (`InsertReading.values`), a signal read; instruments have none. */
   readingValues?(): readonly number[] | null;
+  /** The insert's sidechain source, for a panel that needs one (null: none; instruments have none). */
+  readonly sidechain?: string | null;
   /** The project's sample rate, where a panel draws a response. */
   readonly sampleRate?: number | undefined;
 }
@@ -32,7 +34,9 @@ const Deferred: ReadonlySet<PanelKind> = new Set<DeferredPanelKind>([
   'phaseMeter',
   'expander',
   'testOscillator',
-  'frequencySpread'
+  'frequencySpread',
+  'vocoder',
+  'voiceShaper'
 ]);
 
 /** The panel component of each kind loaded with the window (the deferred ones are not here). */
