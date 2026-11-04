@@ -13,8 +13,9 @@ import { ProjectStore } from '../state/project.store';
 import { SelectionStore } from '../state/selection.store';
 import { UiStore } from '../state/ui.store';
 import { MixerStrip, type StripLayout } from './mixer-strip';
+import { MonitorSectionBar } from './monitor-section';
 import { signalFlow } from './routing';
-import { PanLaws } from './strip-settings';
+import { PanLaws, SoloModes } from './strip-settings';
 
 /** Logic's Mixer views: every strip, the tracks' strips, or the buses (aux and VCA strips) and outputs. */
 export type MixerView = 'all' | 'tracks' | 'buses';
@@ -95,6 +96,7 @@ export class MixerViewStore {
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [
     MixerStrip,
+    MonitorSectionBar,
     XuiButtonImports,
     XuiIconImports,
     XuiMenuImports,
@@ -148,6 +150,7 @@ export class MixerViewStore {
         </xui-menu>
       </ng-template>
       <div class="ms-auto flex items-center gap-2">
+        <an-monitor-section />
         <button
           type="button"
           class="bezel text-foreground flex h-6.5 items-center gap-1 px-2 text-[11px] font-semibold"
@@ -157,6 +160,9 @@ export class MixerViewStore {
           <span class="text-foreground-muted">PDC</span>{{ pdcLabel() }}
           @if (project.settings().mixer.lowLatency) {
             <span class="text-lit">Low Latency</span>
+          }
+          @if (soloLabel(); as label) {
+            <span class="text-lit">{{ label }}</span>
           }
           <ng-icon xui name="matExpandMoreRound" size="14px" />
         </button>
@@ -186,6 +192,22 @@ export class MixerViewStore {
             >
               Low Latency Mode ({{ project.settings().mixer.lowLatencyLimitMs }} ms)
             </button>
+            <xui-menu-divider />
+            <span class="text-foreground-muted px-3 pt-1 text-[10px] font-semibold tracking-wide uppercase">
+              Solo Mode
+            </span>
+            @for (mode of soloModes; track mode.value) {
+              <button
+                xuiMenuItem
+                type="button"
+                role="menuitemradio"
+                [attr.data-solo-mode]="mode.value"
+                [attr.aria-checked]="project.settings().mixer.soloMode === mode.value"
+                (click)="mixer.setMixerSettings({ soloMode: mode.value })"
+              >
+                {{ mode.label }}
+              </button>
+            }
             <xui-menu-divider />
             <span class="text-foreground-muted px-3 pt-1 text-[10px] font-semibold tracking-wide uppercase">
               Pan Law
@@ -281,6 +303,12 @@ export class MixerPane {
   protected readonly filters = StripFilters;
   protected readonly pdcModes = PdcModes;
   protected readonly panLaws = PanLaws;
+  protected readonly soloModes = SoloModes;
+  /** The solo mode on the settings button, when it is not plain solo in place. */
+  protected readonly soloLabel = computed(() => {
+    const mode = this.project.settings().mixer.soloMode;
+    return mode === 'afl' ? 'AFL' : mode === 'pfl' ? 'PFL' : null;
+  });
   protected readonly selected = this.selection.track;
   protected readonly strips = computed(() =>
     visibleStrips(this.project.trackList(), this.store.view(), this.store.hidden())

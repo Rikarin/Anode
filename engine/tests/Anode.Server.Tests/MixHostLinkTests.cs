@@ -3,6 +3,8 @@ using Anode.Ipc;
 using Anode.Ipc.Segments;
 using Anode.Model;
 using Anode.Server.Engine;
+using System.Net;
+using System.Net.Http.Json;
 using System.Text;
 
 namespace Anode.Server.Tests;
@@ -20,6 +22,42 @@ public sealed class MixHostLinkTests : IAsyncDisposable {
         if (host is not null) {
             await host.DisposeAsync();
         }
+    }
+
+    [Fact]
+    public async Task The_solo_mode_solo_safe_and_the_monitor_section_reach_the_host() {
+        host = new(EngineConnection.Version);
+        host.Listen(socketPath);
+        await using var server = new ServerFixture(socketPath);
+        using var client = server.CreateClient();
+        await ServerFixture.Eventually(async () =>
+            (await server.SystemAsync(client)).Engine.State == EngineState.Connected
+        );
+        await client.CreateProjectAsync();
+        await client.EditAsync(new AddAuxCommand(1, "Verb"));
+        var verb = (await client.ProjectAsync()).Tracks[0].Id;
+        await client.EditAsync(
+            new SetStripCommand(verb, SoloSafe: true),
+            new SetMixerSettingsCommand(SoloMode: SoloMode.Afl)
+        );
+        await WaitForAsync<SetStripMessage>(static m => m.Strip.SoloSafe);
+        await WaitForAsync<SetMixerMessage>(static m => m.SoloMode == EngineSoloMode.Afl);
+
+        var section = new MonitorSection(true, -20, true, true, -6, 0);
+        var saved = await client.PutAsJsonAsync(
+            "/api/v1/settings/monitoring",
+            new MonitoringSettings(false, null, [], section),
+            TestContext.Current.CancellationToken
+        );
+        saved.EnsureSuccessStatusCode();
+        await WaitForAsync<SetMonitoringMessage>(static m => m.Mono && Math.Abs(m.Gain - Units.DbToGain(-26)) < 1e-5);
+
+        var refused = await client.PutAsJsonAsync(
+            "/api/v1/settings/monitoring",
+            new MonitoringSettings(false, null, [], section with { DimDb = 3 }),
+            TestContext.Current.CancellationToken
+        );
+        Assert.Equal(HttpStatusCode.UnprocessableEntity, refused.StatusCode);
     }
 
     [Fact]

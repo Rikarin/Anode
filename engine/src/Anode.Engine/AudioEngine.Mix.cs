@@ -39,6 +39,10 @@ public enum DelayCompensation {
 // the compensation mode: a late strip claims less latency than it has and its edges read further back; an early strip
 // claims more, and everything else on the way to its summing points is delayed to make room. A dual pan mixes the
 // output's two channels (not the sends') just before the fader.
+//
+// Solo: in place it silences everything else in the mix (solo-safe strips stay) as before. In AFL and PFL the mix is left
+// alone and each soloed strip also adds to the listen bus, after or before its fader, at the delay its output has; the
+// device stage then sends the listen bus to the monitors instead of the master (AudioEngine.Monitor.cs).
 public sealed unsafe partial class AudioEngine {
     /// <summary>Parameter automation is applied at this granularity, in frames.</summary>
     public const int ParameterBlock = 32;
@@ -66,12 +70,15 @@ public sealed unsafe partial class AudioEngine {
     readonly float[] edgeRight = PinnedBlock();
     readonly float[] dualLeft = PinnedBlock();
     readonly float[] dualRight = PinnedBlock();
+    readonly float[] listenLeft = PinnedBlock();
+    readonly float[] listenRight = PinnedBlock();
     readonly MidiEvent[] chunkEvents = new MidiEvent[MidiTrackState.MaxEvents];
 
     int delayCompensation;
     int lowLatency;
     int lowLatencyLimit;
     int panLaw = (int)Ipc.EnginePanLaw.Minus3DbCompensated;
+    int soloMode;
     int latencyOverflow;
     int masterOutputDelay;
     RenderCapture? capture;
@@ -88,6 +95,8 @@ public sealed unsafe partial class AudioEngine {
     long blockClock;
     bool blockCountIn;
     Ipc.EnginePanLaw blockPanLaw;
+    Ipc.EngineSoloMode blockSoloMode;
+    bool blockListen;
     TransportContext blockTransport;
 
     // The gains of the edge being mixed: constant (gainLeft, gainRight) or per frame (coefLeft, coefRight).
@@ -132,17 +141,21 @@ public sealed unsafe partial class AudioEngine {
         return default;
     }
 
-    /// <summary>Control thread: delay compensation, low-latency mode with its limit in frames, and the pan law.</summary>
+    /// <summary>
+    ///     Control thread: delay compensation, low-latency mode with its limit in frames, the pan law and the solo mode.
+    /// </summary>
     public void SetMixer(
         DelayCompensation compensation,
         bool lowLatencyMode,
         int limitFrames,
-        Ipc.EnginePanLaw law = Ipc.EnginePanLaw.Minus3DbCompensated
+        Ipc.EnginePanLaw law = Ipc.EnginePanLaw.Minus3DbCompensated,
+        Ipc.EngineSoloMode solo = Ipc.EngineSoloMode.InPlace
     ) {
         Volatile.Write(ref delayCompensation, (int)compensation);
         Volatile.Write(ref lowLatencyLimit, Math.Max(0, limitFrames));
         Volatile.Write(ref lowLatency, lowLatencyMode ? 1 : 0);
         Volatile.Write(ref panLaw, (int)law);
+        Volatile.Write(ref soloMode, (int)solo);
     }
 
     /// <summary>
@@ -197,6 +210,7 @@ public sealed unsafe partial class AudioEngine {
         blockClock = clock;
         blockCountIn = countIn;
         blockPanLaw = (Ipc.EnginePanLaw)Volatile.Read(ref panLaw);
+        blockSoloMode = (Ipc.EngineSoloMode)Volatile.Read(ref soloMode);
         var plan = model.Mix;
         var rolling = transport.Rolling && !countIn;
         blockCapture = rolling ? Volatile.Read(ref capture) : null; // a render captures from its first rolling frame
@@ -551,8 +565,16 @@ public sealed unsafe partial class AudioEngine {
             anySolo |= node.Channel.Strip.Solo;
         }
 
+        // AFL and PFL leave the mix (and a render) alone: the soloed strips go to the listen bus as well.
+        var inPlace = blockSoloMode == Ipc.EngineSoloMode.InPlace;
+        blockListen = anySolo && !inPlace && Volatile.Read(ref offline) == 0;
+        if (blockListen) {
+            listenLeft.AsSpan(0, blockFrames).Clear();
+            listenRight.AsSpan(0, blockFrames).Clear();
+        }
+
         foreach (var node in plan.Order) {
-            NodeLatency(node, mode, anySolo);
+            NodeLatency(node, mode, anySolo && inPlace);
         }
 
         MasterLatency(plan, mode);
@@ -572,7 +594,7 @@ public sealed unsafe partial class AudioEngine {
             _ => input + ch.ChainLatency
         } - ch.Strip.DelayFrames;
         ch.ImpliedSolo = implied;
-        ch.Audible = !anySolo || ch.Strip.Solo || implied;
+        ch.Audible = !anySolo || ch.Strip.Solo || implied || ch.Strip.SoloSafe;
         var soloing = anySolo && ch.Audible;
         Reach(node.OutputDestination, ch.Latency, live, soloing);
         foreach (var d in node.SendDestinations) {
@@ -788,6 +810,11 @@ public sealed unsafe partial class AudioEngine {
         var destination = node.OutputDestination;
         Tap(line, Delay(destination, ch.Latency), left, right, ref tapped, out var srcL, out var srcR);
         var frames = blockFrames;
+        var listening = blockListen && ch.Strip.Solo;
+        if (listening && blockSoloMode == Ipc.EngineSoloMode.Pfl) {
+            ListenPre(srcL, srcR);
+        }
+
         if (stereo && ch.Strip.DualPan) {
             var target = DualTarget(ch.Strip);
             var from = ch.Dual.Set ? ch.Dual : target;
@@ -795,6 +822,10 @@ public sealed unsafe partial class AudioEngine {
             Dual(from, target, srcL, srcR, dualLeft.AsSpan(0, frames), dualRight.AsSpan(0, frames));
             srcL = dualLeft.AsSpan(0, frames);
             srcR = dualRight.AsSpan(0, frames);
+        }
+
+        if (listening && blockSoloMode == Ipc.EngineSoloMode.Afl) {
+            Accumulate(srcL, srcR, listenLeft.AsSpan(0, frames), listenRight.AsSpan(0, frames));
         }
 
         RenderTarget? stem = null;
@@ -825,6 +856,12 @@ public sealed unsafe partial class AudioEngine {
             Add(destLeft[destination].AsSpan(0, frames), el);
             Add(destRight[destination].AsSpan(0, frames), er);
         }
+    }
+
+    /// <summary>A soloed strip's signal into the listen bus as it is.</summary>
+    void ListenPre(ReadOnlySpan<float> left, ReadOnlySpan<float> right) {
+        Add(listenLeft.AsSpan(0, blockFrames), left);
+        Add(listenRight.AsSpan(0, blockFrames), right);
     }
 
     /// <summary>A dual pan's gains under the block's pan law.</summary>

@@ -444,6 +444,7 @@ public sealed class HostSync(HostLink link, SegmentPool pool, ILogger logger, Se
             || old.DualPan != now.DualPan
             || old.PanLeft != now.PanLeft
             || old.PanRight != now.PanRight
+            || old.SoloSafe != now.SoloSafe
                 ? [new SetStripMessage(id, now)]
                 : [];
         return levels.Concat(
@@ -511,7 +512,8 @@ public sealed class HostSync(HostLink link, SegmentPool pool, ILogger logger, Se
                 },
                 mixer.LowLatency,
                 mixer.LowLatencyLimitMs,
-                (EnginePanLaw)mixer.PanLaw
+                (EnginePanLaw)mixer.PanLaw,
+                (EngineSoloMode)mixer.SoloMode
             );
         }
 

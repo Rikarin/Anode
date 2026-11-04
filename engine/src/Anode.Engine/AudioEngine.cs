@@ -308,6 +308,7 @@ public sealed unsafe partial class AudioEngine : IAudioProcessor {
             || blockCapture is { MonitoringRender: true }) {
             MonitorOutputs(outputs, outputChannels, offset, outLeft, outRight, click);
         } else {
+            MonitorSection(outLeft, outRight);
             WriteOutputs(outputs, outputChannels, offset, outLeft, outRight, click);
         }
 

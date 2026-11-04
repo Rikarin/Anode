@@ -1,5 +1,6 @@
 import {
   ApiError,
+  DefaultMonitoringSettings,
   DefaultPanner,
   type EditCommand,
   ListenIn,
@@ -223,10 +224,10 @@ describe('FakeAnodeServer, Phase 10 (docs/11-phase-10.md)', () => {
   describe('monitoring, discovery and pads', () => {
     it('keeps monitoring and pad sets as user settings, checked', async () => {
       const { server } = await setUp();
-      expect(await server.monitoring()).toEqual({ binaural: false, downmixTo: null, speakerMap: [] });
-      await server.setMonitoring({ binaural: true, downmixTo: 'stereo', speakerMap: [1, 2, 0] });
+      expect(await server.monitoring()).toEqual(DefaultMonitoringSettings);
+      await server.setMonitoring({ binaural: true, downmixTo: 'stereo', speakerMap: [1, 2, 0], section: null });
       expect((await server.monitoring()).speakerMap).toEqual([1, 2, 0]);
-      expect(await status(() => server.setMonitoring({ binaural: false, speakerMap: [-1] }))).toBe(422);
+      expect(await status(() => server.setMonitoring({ binaural: false, speakerMap: [-1], section: null }))).toBe(422);
       const pads = await server.remotePads();
       expect(pads.sets.map(s => s.name)).toEqual(['Transport', 'Editing']);
       await server.setRemotePads({ sets: [{ id: 'mine', name: 'Mine', pads: [] }] });

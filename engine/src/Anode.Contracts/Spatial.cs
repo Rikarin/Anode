@@ -283,11 +283,35 @@ public static class PannerTargets {
 ///     changes bounces or ADM exports. <c>binaural</c> renders the master's speakers (and objects) through HRTFs to
 ///     outputs 1–2; otherwise <c>downmixTo</c> (a format smaller than the master's; null: none) down-mixes per ITU-R
 ///     BS.775 and sends its channels through the map. <c>speakerMap[i]</c> is the 1-based device output of channel i of
-///     what is sent (0: not sent); an empty or short map sends channel i to output i + 1.
+///     what is sent (0: not sent); an empty or short map sends channel i to output i + 1. <c>section</c> is the monitor
+///     section (null in a request: as it is).
 /// </summary>
-public sealed record MonitoringSettings(bool Binaural, ChannelFormat? DownmixTo, IReadOnlyList<int> SpeakerMap) {
-    /// <summary>A new user's: speakers, no down-mix, channel i to output i + 1.</summary>
-    public static MonitoringSettings Default { get; } = new(false, null, []);
+public sealed record MonitoringSettings(
+    bool Binaural,
+    ChannelFormat? DownmixTo,
+    IReadOnlyList<int> SpeakerMap,
+    MonitorSection? Section = null
+) {
+    /// <summary>A new user's: speakers, no down-mix, channel i to output i + 1, the monitor section flat.</summary>
+    public static MonitoringSettings Default { get; } = new(false, null, [], MonitorSection.Default);
+}
+
+/// <summary>
+///     The monitor section: what the speakers get after the master, never what a bounce or the listen-in hears. Output
+///     pairs a strip is routed to directly bypass it. The level is <c>levelDb</c>, or with <c>reference</c> the calibrated
+///     <c>referenceDb</c>; <c>dim</c> takes <c>dimDb</c> (0 or less) off whichever applies; <c>mono</c> folds the front pair
+///     to check it in mono.
+/// </summary>
+public sealed record MonitorSection(
+    bool Dim,
+    double DimDb,
+    bool Mono,
+    bool Reference,
+    double ReferenceDb,
+    double LevelDb
+) {
+    /// <summary>Unity, the dim −20 dB, the reference −12 dB.</summary>
+    public static MonitorSection Default { get; } = new(false, -20, false, false, -12, 0);
 }
 
 /// <summary>

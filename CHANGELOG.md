@@ -12,3 +12,5 @@ All notable changes to Anode are recorded here, by hand.
   signals, and the pan law as a project setting (schema 12; existing projects keep −3 dB compensated).
 - Mixer: drag an insert or MIDI FX slot to another strip to move it with its state and automation, ⌥-drag to copy it;
   the slot's menu does the same by Copy to and Move to.
+- Solo: solo safe on any full strip, AFL and PFL as a solo mode (schema 13), and a monitor section in the Mixer's toolbar
+  with dim, mono and a reference level, which the speakers hear and a bounce does not.

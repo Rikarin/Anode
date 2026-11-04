@@ -617,7 +617,8 @@ public static class ProjectPackage {
             Recording = settings.Recording ?? ProjectDefaults.Recording(signature),
             Mixer = settings.Mixer is { } mixer && Enum.IsDefined(mixer.Pdc) && double.IsFinite(mixer.LowLatencyLimitMs)
                 ? mixer with {
-                    PanLaw = Enum.IsDefined(mixer.PanLaw) ? mixer.PanLaw : ProjectDefaults.Mixer.PanLaw
+                    PanLaw = Enum.IsDefined(mixer.PanLaw) ? mixer.PanLaw : ProjectDefaults.Mixer.PanLaw,
+                    SoloMode = Enum.IsDefined(mixer.SoloMode) ? mixer.SoloMode : ProjectDefaults.Mixer.SoloMode
                 }
                 : ProjectDefaults.Mixer,
             SmartTempo = settings.SmartTempo is { } smart
@@ -1137,13 +1138,13 @@ static class PackageKeys {
 ///     refused rather than read wrongly.
 /// </remarks>
 public static class PackageMigrations {
-    public const int CurrentSchemaVersion = 12;
+    public const int CurrentSchemaVersion = 13;
     const string VersionField = "schemaVersion";
 
     /// <summary><c>Steps[n]</c> takes schema <c>n + 1</c> to <c>n + 2</c>; it gets the kind of file and its JSON.</summary>
     static readonly Func<string, JsonObject, JsonObject>[] Steps = [
         ToSchema2, ToSchema3, ToSchema4, ToSchema5, ToSchema6, ToSchema7, ToSchema8, ToSchema9, ToSchema10, ToSchema11,
-        ToSchema12
+        ToSchema12, ToSchema13
     ];
 
     public static JsonObject Upgrade(JsonObject json, string kind) {
@@ -1394,6 +1395,27 @@ public static class PackageMigrations {
     static JsonObject ToSchema12(string kind, JsonObject json) {
         Schema12.Fill(kind, json);
         return json;
+    }
+
+    /// <summary>Schema 12 to 13 (solo safe and the solo mode): no strip is solo safe, and solo is solo in place.</summary>
+    static JsonObject ToSchema13(string kind, JsonObject json) {
+        if (kind == PackageKeys.ProjectKind) {
+            if (json[PackageKeys.Settings]?["mixer"] is JsonObject mixer) {
+                mixer["soloMode"] ??= "inPlace";
+            }
+
+            Safe(json["master"] as JsonObject);
+        } else if (kind == PackageKeys.TrackKind) {
+            Safe(json[PackageKeys.Track]?["strip"] as JsonObject);
+        }
+
+        return json;
+
+        static void Safe(JsonObject? strip) {
+            if (strip is not null) {
+                strip["soloSafe"] ??= false;
+            }
+        }
     }
 }
 

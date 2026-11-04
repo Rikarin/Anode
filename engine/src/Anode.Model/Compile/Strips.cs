@@ -69,7 +69,8 @@ public static class Strips {
             full && track is not null ? (int)Math.Round(strip.DelayMs * state.SampleRate / 1000) : 0,
             strip.DualPan,
             (float)strip.PanLeft,
-            (float)strip.PanRight
+            (float)strip.PanRight,
+            full && track is not null && strip.SoloSafe
         );
     }
 

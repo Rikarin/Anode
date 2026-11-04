@@ -555,6 +555,38 @@ public sealed class MultichannelTests : IDisposable {
         }
     }
 
+    [Theory]
+    [InlineData(EngineSoloMode.Pfl)]
+    [InlineData(EngineSoloMode.Afl)]
+    public void A_soloed_surround_strip_reaches_the_monitors_front_pair_and_a_bounce_keeps_the_mix(EngineSoloMode mode) {
+        const EngineChannelFormat f51 = EngineChannelFormat.Surround51;
+        EngineTrack[] tracks = [
+            TestAudio.Track(1, false, Strip(0.5f, outputFormat: f51, panner: Surround(2)) with { Solo = true }),
+            TestAudio.Track(2, false, Strip(1f, outputFormat: f51, panner: Surround(5)))
+        ];
+        using var rig = new Rig(dir, 64, [Model(1, 0), Model(2, 2)], tracks, Files, Strip(input: f51, outputFormat: f51), 6);
+        rig.Controller.SetMixer("all", false, 10, soloMode: mode);
+        var o = rig.Render(1_280);
+        // PFL hears the source itself, unfaded; AFL the panned channel, faded, through the stand-in's down-mix (½, even
+        // channels to the left).
+        var (left, right) = mode == EngineSoloMode.Pfl ? (1f, 1f) : (0.25f, 0f);
+        for (var f = 64; f < 1_280; f++) {
+            Near(M(f) * left, o[0][f], f, "the listen bus, left");
+            Near(M(f) * right, o[1][f], f, "the listen bus, right");
+            Near(0, o[2][f], f, "the monitors' other speakers fall silent");
+            Near(0, o[5][f], f, "the monitors' other speakers fall silent");
+        }
+
+        var master = Bounce(rig.Controller, new(1, 0, 1_280, Path.Combine(dir, "mix.wav")));
+        var (data, channels, _) = Wav.Read(Assert.Single(master));
+        var order = WaveChannels.Of(SpeakerLayout.Of(SpeakerFormat.Surround51)).Order;
+        for (var k = 0; k < channels; k++) {
+            if (order[k] == 5) {
+                Near(Q(640), data[640 * channels + k], 640, "the other track in the bounce");
+            }
+        }
+    }
+
     [Fact]
     public void Monitoring_reaches_the_device_through_the_speaker_map_and_never_a_bounce() {
         const EngineChannelFormat f714 = EngineChannelFormat.Surround714;

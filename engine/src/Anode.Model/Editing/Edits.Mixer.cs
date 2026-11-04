@@ -670,11 +670,16 @@ public static partial class Edits {
             throw new EditException($"Unknown pan law {law}.");
         }
 
+        if (c.SoloMode is { } solo && !Enum.IsDefined(solo)) {
+            throw new EditException($"Unknown solo mode {solo}.");
+        }
+
         var mixer = new MixerSettings(
             c.Pdc ?? old.Pdc,
             c.LowLatency ?? old.LowLatency,
             c.LowLatencyLimitMs ?? old.LowLatencyLimitMs,
-            c.PanLaw ?? old.PanLaw
+            c.PanLaw ?? old.PanLaw,
+            c.SoloMode ?? old.SoloMode
         );
         return [new SettingsChanged(state.Settings with { Mixer = mixer })];
     }

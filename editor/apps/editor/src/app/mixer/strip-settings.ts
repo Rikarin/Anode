@@ -1,5 +1,5 @@
 import { ChangeDetectionStrategy, Component, computed, inject, input } from '@angular/core';
-import type { ChannelStrip, PanLaw, Track } from '@anode/api-client';
+import type { ChannelStrip, PanLaw, SoloMode, Track } from '@anode/api-client';
 import { XuiNumericInputImports } from '@xui/numeric-input';
 import { XuiPopoverImports } from '@xui/popover';
 import { MixerStore, type StripInputChange } from '../state/mixer.store';
@@ -11,6 +11,13 @@ export const PanLaws: readonly { value: PanLaw; label: string }[] = [
   { value: 'minus3DbCompensated', label: '−3 dB compensated' },
   { value: 'minus4Point5Db', label: '−4.5 dB' },
   { value: 'minus6Db', label: '−6 dB' }
+];
+
+/** What a strip's solo can do. */
+export const SoloModes: readonly { value: SoloMode; label: string }[] = [
+  { value: 'inPlace', label: 'Solo in Place' },
+  { value: 'afl', label: 'After-Fader Listen' },
+  { value: 'pfl', label: 'Pre-Fader Listen' }
 ];
 
 /** What the strip's settings button says: what differs from a plain strip, or that nothing does. */
@@ -28,12 +35,15 @@ export function stripSummary(strip: ChannelStrip): string {
   if (strip.dualPan) {
     parts.push('Dual');
   }
+  if (strip.soloSafe) {
+    parts.push('Safe');
+  }
   return parts.join(' ');
 }
 
 /**
- * A strip's input stage, as a slot row that opens a popover: trim, polarity, delay, and dual pan with its two positions
- * for a stereo strip. The row says what is set, so a strip with a trim shows it without being opened.
+ * A strip's input stage, as a slot row that opens a popover: trim, polarity, delay, solo safe, and dual pan with its two
+ * positions for a stereo strip. The row says what is set, so a strip with a trim shows it without being opened.
  */
 @Component({
   selector: 'an-strip-settings',
@@ -95,6 +105,17 @@ export function stripSummary(strip: ChannelStrip): string {
           [value]="strip().delayMs"
           (valueChange)="set({ delayMs: $event ?? 0 })"
         />
+        <span class="text-foreground-muted">Solo Safe</span>
+        <label class="text-foreground flex items-center gap-2">
+          <input
+            type="checkbox"
+            class="accent-(--color-primary)"
+            data-testid="strip-solo-safe"
+            [checked]="strip().soloSafe"
+            (change)="set({ soloSafe: !strip().soloSafe })"
+          />
+          On
+        </label>
         @if (stereo()) {
           <span class="text-foreground-muted">Dual Pan</span>
           <label class="text-foreground flex items-center gap-2">

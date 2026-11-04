@@ -310,6 +310,19 @@ public sealed unsafe partial class AudioEngine {
         if (edge.Kind == EdgeKind.DownmixStereo) {
             Downmix(edge, line, delay, width, ref tapped);
             OutputGains(node, true);
+            if (blockListen && ch.Strip.Solo) {
+                if (blockSoloMode == Ipc.EngineSoloMode.Pfl) {
+                    ListenPre(pieceOut.AsSpan(0, frames), pieceOut.AsSpan(frames, frames));
+                } else {
+                    Accumulate(
+                        pieceOut.AsSpan(0, frames),
+                        pieceOut.AsSpan(frames, frames),
+                        listenLeft.AsSpan(0, frames),
+                        listenRight.AsSpan(0, frames)
+                    );
+                }
+            }
+
             var outL = edgeLeft.AsSpan(0, frames);
             var outR = edgeRight.AsSpan(0, frames);
             var (peakL, peakR) = AccumulateTo(pieceOut.AsSpan(0, frames), pieceOut.AsSpan(frames, frames), outL, outR);
@@ -321,6 +334,10 @@ public sealed unsafe partial class AudioEngine {
         }
 
         var count = Render(node, edge, line, delay, width, ref tapped);
+        if (blockListen && ch.Strip.Solo) {
+            ListenWide(node, count, width);
+        }
+
         MeterPlanar(ch, planar.AsSpan(0, count * frames), count);
         stem?.WritePlanar(planar.AsSpan(0, count * frames), count, frames, destLatency[destination]);
         if (edge.Kind == EdgeKind.Object) {
@@ -335,6 +352,40 @@ public sealed unsafe partial class AudioEngine {
         }
 
         AddToDestination(destination, edge.Width, count);
+    }
+
+    /// <summary>
+    ///     A soloed strip whose output is rendered by its edge into the listen bus: PFL the signal before the fader
+    ///     (<paramref name="width" /> channels of it, tapped), AFL the <paramref name="count" /> rendered channels;
+    ///     down-mixed to stereo when wider.
+    /// </summary>
+    void ListenWide(MixNode node, int count, int width) {
+        var frames = blockFrames;
+        if (blockSoloMode == Ipc.EngineSoloMode.Pfl) {
+            if (node.ListenSignal is { } signal) {
+                Mix(signal, 2, width, 0, edgeLeft.AsSpan(0, frames));
+                Mix(signal, 2, width, 1, edgeRight.AsSpan(0, frames));
+                ListenPre(edgeLeft.AsSpan(0, frames), edgeRight.AsSpan(0, frames));
+            } else {
+                ListenPre(Tapped(0), Tapped(width > 1 ? 1 : 0));
+            }
+
+            return;
+        }
+
+        if (node.ListenOutput is not { } matrix) {
+            ListenPre(planar.AsSpan(0, frames), planar.AsSpan(count > 1 ? frames : 0, frames));
+            return;
+        }
+
+        var inputs = matrix.Length / 2;
+        for (var i = 0; i < Math.Min(count, inputs); i++) {
+            var from = planar.AsSpan(i * frames, frames);
+            for (var f = 0; f < frames; f++) {
+                listenLeft[f] += matrix[i] * from[f];
+                listenRight[f] += matrix[inputs + i] * from[f];
+            }
+        }
     }
 
     /// <summary>
@@ -1277,6 +1328,7 @@ public sealed unsafe partial class AudioEngine {
             target.WritePlanar(sent.AsSpan(0, count * frames), count, frames, m.Latency + masterOutputDelay + latency);
         }
 
+        MonitorSection(sent, count);
         var map = setup?.Map;
         for (var i = 0; i < count; i++) {
             var output = map is not null && i < map.Length ? map[i] : i;

@@ -231,7 +231,8 @@ public sealed record SetStripCommand(
     double? DelayMs = null,
     bool? DualPan = null,
     double? PanLeft = null,
-    double? PanRight = null
+    double? PanRight = null,
+    bool? SoloSafe = null
 ) : EditCommand;
 
 /// <summary>Places a file on a track; the whole file unless <c>fileOffset</c> and <c>length</c> say otherwise.</summary>
@@ -619,7 +620,8 @@ public sealed record SetMixerSettingsCommand(
     PdcMode? Pdc = null,
     bool? LowLatency = null,
     double? LowLatencyLimitMs = null,
-    PanLaw? PanLaw = null)
+    PanLaw? PanLaw = null,
+    SoloMode? SoloMode = null)
     : EditCommand;
 
 /// <summary>Replaces a track's instrument, inserts and sends with a saved patch's.</summary>

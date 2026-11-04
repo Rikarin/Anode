@@ -2526,7 +2526,8 @@ export interface components {
      *     time after the inserts, before the fader (negative: earlier, which delay compensation pays for by delaying
      *     everything else). dualPan pans a stereo signal's two channels on their own, to panLeft and
      *     panRight (−1…1), instead of balancing it with pan; at −1 and 1 the signal passes as it is. They
-     *     stay when it is off. A mono signal always takes pan, a surround output its panner.
+     *     stay when it is off. A mono signal always takes pan, a surround output its panner.soloSafe (a track with a full strip, a bus's aux above all): the strip stays audible when others are
+     *                         soloed in place.
      */
     ChannelStrip: {
       /** Format: double */
@@ -2554,6 +2555,7 @@ export interface components {
       panLeft: number;
       /** Format: double */
       panRight: number;
+      soloSafe: boolean;
     };
     /**
      * @description A chord of the chord track at project tick `tick` (it holds until the next chord): its root, its quality
@@ -4713,6 +4715,7 @@ export interface components {
       /** Format: double */
       lowLatencyLimitMs?: null | number;
       panLaw?: null | components['schemas']['PanLaw'];
+      soloMode?: null | components['schemas']['SoloMode'];
     };
     /**
      * @description Phase 10, a movie import's result: sets the project's movie (replacing one it has). The `movieImport` job
@@ -5104,6 +5107,7 @@ export interface components {
       panLeft?: null | number;
       /** Format: double */
       panRight?: null | number;
+      soloSafe?: null | boolean;
     };
     /**
      * @description Phase 10: sets a track strip's input format (mono or stereo for instrument tracks; any for audio and aux
@@ -6179,7 +6183,7 @@ export interface components {
     /**
      * @description Plugin delay compensation, and low-latency mode: while it is on, plugins on the path of record-armed or
      *     monitored tracks whose latency exceeds `lowLatencyLimitMs` are bypassed. `panLaw` is the project's pan
-     *     law.
+     *     law, `soloMode` what solo does.
      */
     MixerSettings: {
       pdc: components['schemas']['PdcMode'];
@@ -6187,6 +6191,7 @@ export interface components {
       /** Format: double */
       lowLatencyLimitMs: number;
       panLaw: components['schemas']['PanLaw'];
+      soloMode: components['schemas']['SoloMode'];
     };
     /**
      * @description Monitoring (`GET/PUT /settings/monitoring`), stored in the user settings, not the project: the speaker map is
@@ -6194,12 +6199,31 @@ export interface components {
      *     changes bounces or ADM exports. `binaural` renders the master's speakers (and objects) through HRTFs to
      *     outputs 1–2; otherwise `downmixTo` (a format smaller than the master's; null: none) down-mixes per ITU-R
      *     BS.775 and sends its channels through the map. `speakerMap[i]` is the 1-based device output of channel i of
-     *     what is sent (0: not sent); an empty or short map sends channel i to output i + 1.
+     *     what is sent (0: not sent); an empty or short map sends channel i to output i + 1. `section` is the monitor
+     *     section (null in a request: as it is).
      */
     MonitoringSettings: {
       binaural: boolean;
       downmixTo?: null | components['schemas']['ChannelFormat'];
       speakerMap: number[];
+      section: null | components['schemas']['MonitorSection'];
+    };
+    /**
+     * @description The monitor section: what the speakers get after the master, never what a bounce or the listen-in hears. Output
+     *     pairs a strip is routed to directly bypass it. The level is `levelDb`, or with `reference` the calibrated
+     *     `referenceDb`; `dim` takes `dimDb` (0 or less) off whichever applies; `mono` folds the front pair
+     *     to check it in mono.
+     */
+    MonitorSection: {
+      dim: boolean;
+      /** Format: double */
+      dimDb: number;
+      mono: boolean;
+      reference: boolean;
+      /** Format: double */
+      referenceDb: number;
+      /** Format: double */
+      levelDb: number;
     };
     /**
      * @description The project's movie (`Project.movie`; null: none). `path` is relative to the project folder when the
@@ -7638,6 +7662,11 @@ export interface components {
       defaultFollow: components['schemas']['FlexFollow'];
       analyzeImports: boolean;
     };
+    /**
+     * @description What a strip's solo does.
+     * @enum {unknown}
+     */
+    SoloMode: 'inPlace' | 'afl' | 'pfl';
     /**
      * @description One staff of a staff style. `transpose` is in semitones, written = concert + transpose (B♭ clarinet +2, F
      *     horn +7, alto sax +9); an octave clef's octave is the clef's, not part of it. With several staves (top to

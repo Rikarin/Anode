@@ -104,7 +104,7 @@ function snapshot(revision = 3): Project {
       signatures: [{ tick: 0, numerator: 4, denominator: 4 }],
       keys: [{ tick: 0, tonic: 0, mode: 'major' }],
       recording: { cycleMode: 'takeFolder', replace: false, autopunch: false, punchInTick: 0, punchOutTick: 15_360 },
-      mixer: { pdc: 'all', lowLatency: false, lowLatencyLimitMs: 10, panLaw: 'minus3DbCompensated' },
+      mixer: { pdc: 'all', lowLatency: false, lowLatencyLimitMs: 10, panLaw: 'minus3DbCompensated', soloMode: 'inPlace' },
       smartTempo: { mode: 'keep', defaultFollow: 'off', analyzeImports: true },
       varispeed: { enabled: false, mode: 'speedOnly', speed: 1 },
       sync: { source: 'internal', destinations: [], frameRate: 'fps25', startOffsetSeconds: 0, linkStartStop: false },

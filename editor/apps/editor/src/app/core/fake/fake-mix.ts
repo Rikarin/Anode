@@ -326,7 +326,8 @@ export function applyStrip(project: Project, command: Command<'setStrip'>, ctx: 
     delayMs: command.delayMs ?? s.delayMs,
     dualPan: command.dualPan ?? s.dualPan,
     panLeft: command.panLeft ?? s.panLeft,
-    panRight: command.panRight ?? s.panRight
+    panRight: command.panRight ?? s.panRight,
+    soloSafe: command.soloSafe ?? s.soloSafe
   });
   checkStripInput(command);
   const input = [
@@ -335,17 +336,18 @@ export function applyStrip(project: Project, command: Command<'setStrip'>, ctx: 
     command.delayMs,
     command.dualPan,
     command.panLeft,
-    command.panRight
+    command.panRight,
+    command.soloSafe
   ].some(value => value !== null && value !== undefined);
   if (command.trackId === null || command.trackId === undefined) {
     if (input) {
-      refuse('The master has no trim, polarity, delay or dual pan.');
+      refuse('The master has no trim, polarity, delay, dual pan or solo safe.');
     }
     return { ...project, master: patch(project.master) };
   }
   const track = findTrack(project, command.trackId);
   if (input && !hasFullStrip(track.kind)) {
-    refuse(`${track.name} has no trim, polarity, delay or dual pan.`);
+    refuse(`${track.name} has no trim, polarity, delay, dual pan or solo safe.`);
   }
   const next = patch(track.strip);
   let after = withTrack(project, { ...track, strip: next });
@@ -744,7 +746,8 @@ export function applyMixCommand(project: Project, command: EditCommand, ctx: Mix
             pdc: command.pdc ?? m.pdc,
             lowLatency: command.lowLatency ?? m.lowLatency,
             lowLatencyLimitMs: limit,
-            panLaw: command.panLaw ?? m.panLaw
+            panLaw: command.panLaw ?? m.panLaw,
+            soloMode: command.soloMode ?? m.soloMode
           }
         }
       };

@@ -505,7 +505,7 @@ public sealed class PackageTests : IDisposable {
     public void A_Phase_3_package_opens_with_plain_channel_strips_and_saves_as_the_current_schema() {
         CopyFixture("Phase3.anode");
         var state = ProjectPackage.Load(folder);
-        Assert.Equal(new(PdcMode.All, false, 10, PanLaw.Minus3DbCompensated), state.Settings.Mixer);
+        Assert.Equal(ProjectDefaults.Mixer, state.Settings.Mixer);
         Assert.Empty(state.Groups);
         Assert.Empty(state.Automation);
         Assert.Equal(
@@ -743,6 +743,21 @@ public sealed class PackageTests : IDisposable {
             (Edits.MaxTrimDb, -Edits.MaxStripDelayMs, 1d),
             (strip.TrimDb, strip.DelayMs, strip.PanRight)
         );
+    }
+
+    [Fact]
+    public void A_schema_12_package_has_no_solo_safe_strips_and_solos_in_place() {
+        CopyFixture("Schema12.anode");
+        var root = JsonNode.Parse(File.ReadAllText(Path.Combine(folder, "project.json")))!;
+        Assert.Equal(12, root["schemaVersion"]!.GetValue<int>());
+        var state = ProjectPackage.Load(folder);
+        Assert.Equal(SoloMode.InPlace, state.Settings.Mixer.SoloMode);
+        Assert.NotEmpty(state.Tracks);
+        Assert.All(state.Tracks, static t => Assert.False(t.Strip.SoloSafe));
+        ProjectPackage.Save(folder, state);
+        var saved = JsonNode.Parse(File.ReadAllText(Path.Combine(folder, "project.json")))!;
+        Assert.Equal(PackageMigrations.CurrentSchemaVersion, saved["schemaVersion"]!.GetValue<int>());
+        Assert.Equal("inPlace", saved["settings"]!["mixer"]!["soloMode"]!.GetValue<string>());
     }
 
     void CopyFixture(string name) {

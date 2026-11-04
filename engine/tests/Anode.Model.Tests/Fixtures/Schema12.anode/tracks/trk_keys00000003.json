@@ -1,0 +1,114 @@
+{
+  "schemaVersion": 12,
+  "track": {
+    "id": "trk_keys00000003",
+    "name": "Keys",
+    "kind": "instrument",
+    "color": "#a46be8",
+    "input": {
+      "channel": 0,
+      "stereo": false
+    },
+    "recordArmed": true,
+    "inputMonitoring": false,
+    "strip": {
+      "volumeDb": 0,
+      "pan": 0.5,
+      "mute": false,
+      "solo": true,
+      "inserts": [],
+      "sends": [],
+      "output": "master",
+      "groups": [],
+      "midiEffects": [],
+      "inputFormat": "stereo",
+      "outputFormat": "stereo",
+      "panner": {
+        "mode": "stereo",
+        "surround": {
+          "angle": 0,
+          "diversity": 1,
+          "elevation": 0,
+          "centreLevelDb": 0,
+          "lfeLevelDb": -144,
+          "spread": 60
+        },
+        "object": {
+          "azimuth": 0,
+          "elevation": 0,
+          "distance": 1,
+          "size": 0
+        }
+      },
+      "trimDb": 0,
+      "polarityInverted": false,
+      "delayMs": 0,
+      "dualPan": false,
+      "panLeft": -1,
+      "panRight": 1
+    },
+    "instrument": {
+      "pluginId": "anode.synth",
+      "name": "Synth",
+      "parameters": {
+        "cutoff": 4000,
+        "resonance": 0.2
+      }
+    },
+    "midiInput": {
+      "channel": 1
+    },
+    "collapsed": true,
+    "notes": "",
+    "inputBus": 0,
+    "automationMode": "read",
+    "flexOn": false,
+    "flexMode": "polyphonic",
+    "alternatives": [],
+    "liveLoopsActive": false,
+    "matchGroove": false
+  },
+  "regions": [],
+  "midiRegions": [
+    {
+      "id": "mid_chords000001",
+      "trackId": "trk_keys00000003",
+      "name": "Chords",
+      "startTick": 3840,
+      "lengthTicks": 7680,
+      "playback": {
+        "transpose": 0,
+        "velocity": 0,
+        "quantizeTicks": 0,
+        "quantizeStrength": 1,
+        "swing": 0
+      },
+      "notes": [
+        {
+          "id": 1,
+          "pitch": 57,
+          "velocity": 100,
+          "channel": 1,
+          "startTick": 0,
+          "lengthTicks": 1920,
+          "articulationId": 0
+        }
+      ],
+      "controls": [],
+      "muted": false,
+      "notation": {
+        "displayQuantizeTicks": 0,
+        "tripletQuantizeTicks": 0,
+        "interpretation": true,
+        "noOverlap": true,
+        "syncopation": false,
+        "maxDots": 1
+      },
+      "pitchSource": "off"
+    }
+  ],
+  "takeFolders": [],
+  "automation": [],
+  "patternRegions": [],
+  "sessionPlayerRegions": []
+}

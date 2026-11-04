@@ -756,7 +756,7 @@ public sealed partial class FakeHost : IAsyncDisposable {
         RenderMessage render
     ) {
         lock (gate) {
-            var soloed = tracks.Values.Any(static t => t.Strip.Solo);
+            var soloed = Soloed();
             if (render.Tracks is null) {
                 // A bed-only render (Phase 10's ADM bed) leaves the objects out.
                 return ([
@@ -782,7 +782,7 @@ public sealed partial class FakeHost : IAsyncDisposable {
                     return render.IncludeVolumePan ? t.Strip.Gain : 1;
                 }
 
-                return t.Strip.Mute || (soloed && !t.Strip.Solo) ? 0 : t.Strip.Gain;
+                return t.Strip.Mute || (soloed && !t.Strip.Solo && !t.Strip.SoloSafe) ? 0 : t.Strip.Gain;
             }
         }
     }
@@ -1200,7 +1200,7 @@ public sealed partial class FakeHost : IAsyncDisposable {
                 Callbacks = callbacks,
                 ModelVersion = modelVersion
             };
-            var soloed = tracks.Values.Any(static t => t.Strip.Solo);
+            var soloed = Soloed();
             meters = [
                 ..tracks.Values.OrderBy(static t => t.Id)
                     .Select(t => new MeterEntry {
@@ -1218,9 +1218,12 @@ public sealed partial class FakeHost : IAsyncDisposable {
         telemetry.Write(header, meters, masterMeter);
     }
 
+    /// <summary>Whether a solo silences the rest: one is on, in place (AFL and PFL leave the mix alone).</summary>
+    bool Soloed() => mixer.SoloMode == EngineSoloMode.InPlace && tracks.Values.Any(static t => t.Strip.Solo);
+
     /// <summary>A plausible level: the take's while recording or monitoring, half scale while a region plays.</summary>
     float Level(EngineTrack track, long position, bool soloed) {
-        if (track.Strip.Mute || (soloed && !track.Strip.Solo)) {
+        if (track.Strip.Mute || (soloed && !track.Strip.Solo && !track.Strip.SoloSafe)) {
             return 0;
         }
 

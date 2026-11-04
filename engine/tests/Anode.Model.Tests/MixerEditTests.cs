@@ -70,6 +70,17 @@ public sealed class MixerEditTests {
     }
 
     [Fact]
+    public void Solo_safe_is_a_full_strip_setting_and_the_solo_mode_a_project_one() {
+        Apply(new AddAuxCommand(1, "Verb"), new AddVcaCommand("V"));
+        Assert.Contains("solo safe", Fails(new SetStripCommand(SoloSafe: true)), StringComparison.Ordinal);
+        Assert.Contains("solo safe", Fails(new SetStripCommand(T("V").Id, SoloSafe: true)), StringComparison.Ordinal);
+        Apply(new SetStripCommand(T("Verb").Id, SoloSafe: true), new SetMixerSettingsCommand(SoloMode: SoloMode.Pfl));
+        Assert.True(Strips.Engine(state, T("Verb"), EngineIds.Empty.With(state)).SoloSafe);
+        Assert.Equal(SoloMode.Pfl, state.Settings.Mixer.SoloMode);
+        Assert.Contains("solo mode", Fails(new SetMixerSettingsCommand(SoloMode: (SoloMode)9)), StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void Group_members_that_link_pan_follow_a_dual_pan() {
         Apply(
             new AddTrackCommand("A"),

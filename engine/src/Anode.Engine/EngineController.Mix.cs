@@ -105,7 +105,8 @@ public sealed partial class EngineController {
         string pdc,
         bool lowLatency,
         double lowLatencyLimitMs,
-        EnginePanLaw panLaw = EnginePanLaw.Minus3DbCompensated
+        EnginePanLaw panLaw = EnginePanLaw.Minus3DbCompensated,
+        EngineSoloMode soloMode = EngineSoloMode.InPlace
     ) {
         var mode = pdc switch {
             "all" => DelayCompensation.All,
@@ -115,7 +116,7 @@ public sealed partial class EngineController {
         };
         var limit = double.IsFinite(lowLatencyLimitMs) ? Math.Max(0, lowLatencyLimitMs) : 0;
         lock (gate) {
-            Engine.SetMixer(mode, lowLatency, (int)Math.Round(limit * Options.SampleRate / 1000), panLaw);
+            Engine.SetMixer(mode, lowLatency, (int)Math.Round(limit * Options.SampleRate / 1000), panLaw, soloMode);
             GrowDelays(Engine.Root.Mix);
         }
     }

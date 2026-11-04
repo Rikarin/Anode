@@ -211,6 +211,10 @@ public sealed record TrackInput(int Channel, bool Stereo);
 ///         <c>panRight</c> (−1…1), instead of balancing it with <c>pan</c>; at −1 and 1 the signal passes as it is. They
 ///         stay when it is off. A mono signal always takes <c>pan</c>, a surround output its panner.
 ///     </para>
+///     <para>
+///         <c>soloSafe</c> (a track with a full strip, a bus's aux above all): the strip stays audible when others are
+///         soloed in place.
+///     </para>
 /// </summary>
 public sealed record ChannelStrip(
     double VolumeDb,
@@ -231,7 +235,8 @@ public sealed record ChannelStrip(
     double DelayMs,
     bool DualPan,
     double PanLeft,
-    double PanRight
+    double PanRight,
+    bool SoloSafe
 );
 
 /// <summary>

@@ -22,6 +22,7 @@ import {
   type ControllerAssignments,
   type ControlSurface,
   DefaultMonitoringSettings,
+  DefaultMonitorSection,
   DefaultPanner,
   DefaultRegionNotation,
   type DeltaOp,
@@ -624,7 +625,13 @@ export class FakeAnodeServer implements AnodeApi {
             punchInTick: 0,
             punchOutTick: 4 * 4 * Ppq
           },
-          mixer: { pdc: 'all', lowLatency: false, lowLatencyLimitMs: 10, panLaw: 'minus3DbCompensated' },
+          mixer: {
+            pdc: 'all',
+            lowLatency: false,
+            lowLatencyLimitMs: 10,
+            panLaw: 'minus3DbCompensated',
+            soloMode: 'inPlace'
+          },
           smartTempo: { mode: 'keep', defaultFollow: 'off', analyzeImports: true },
           varispeed: { enabled: false, mode: 'speedOnly', speed: 1 },
           sync: {
@@ -2523,7 +2530,10 @@ export class FakeAnodeServer implements AnodeApi {
 
   setMonitoring(settings: MonitoringSettings): Promise<MonitoringSettings> {
     return this.answer('SetMonitoring', () => {
-      this.monitoringSettings = checkMonitoring(settings);
+      this.monitoringSettings = checkMonitoring(
+        settings,
+        this.monitoringSettings.section ?? DefaultMonitoringSettings.section ?? DefaultMonitorSection
+      );
       return structuredClone(this.monitoringSettings);
     });
   }
@@ -5630,7 +5640,13 @@ export class FakeAnodeServer implements AnodeApi {
           punchInTick: 0,
           punchOutTick: 4 * 4 * Ppq
         },
-        mixer: { pdc: 'all', lowLatency: false, lowLatencyLimitMs: 10, panLaw: 'minus3DbCompensated' },
+        mixer: {
+          pdc: 'all',
+          lowLatency: false,
+          lowLatencyLimitMs: 10,
+          panLaw: 'minus3DbCompensated',
+          soloMode: 'inPlace'
+        },
         smartTempo: { mode: 'keep', defaultFollow: 'off', analyzeImports: true },
         varispeed: { enabled: false, mode: 'speedOnly', speed: 1 },
         sync: { source: 'internal', destinations: [], frameRate: 'fps25', startOffsetSeconds: 0, linkStartStop: false },

@@ -319,6 +319,15 @@ does; a move also carries its automation lanes, a copy starts without any. The m
 as no other edit came between. The Mixer does it by dragging a slot onto another strip (⌥ copies) and by the slot menu's
 Copy to and Move to.
 
+**Solo and the monitor section (after Phase 11):** `settings.mixer.soloMode` is `inPlace` (as before), `afl` or `pfl`. A
+`soloSafe` strip stays audible under solo in place and keeps what it feeds audible. AFL and PFL leave the mix, its meters
+and every render alone: soloed strips add to a stereo listen bus at their output's delay, after or before fader and pan
+(a muted strip is silent in AFL, as its fader is), surround strips through a stereo down-mix, and the device stage sends
+that bus to the monitors in place of the master; implied solos do not join it. The monitor section (`MonitoringSettings.
+section`, a user setting) is the last stage before the device: dim, the mono check of the front pair, and the level or
+the calibrated reference, one gain to the host (`SetMonitoringMessage`), ramped, the click included. Device output pairs
+strips go to directly, the listen-in tap and a bounce (the monitoring render too) are not behind it.
+
 **Open:**
 - Tempo-synced effects take the tempo from the click, not the tempo track.
 - Touch automation releases on the next change, not on mouse-up.

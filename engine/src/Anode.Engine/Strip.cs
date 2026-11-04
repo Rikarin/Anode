@@ -17,6 +17,7 @@ public sealed class Strip {
     bool dualPan;
     float panLeft = -1f;
     float panRight = 1f;
+    bool soloSafe;
 
     /// <summary>The most a strip's delay is, either way, in frames (500 ms at the highest rate, and then some).</summary>
     const int MaxDelayFrames = 1 << 18;
@@ -62,6 +63,9 @@ public sealed class Strip {
 
     public float PanRight => Volatile.Read(ref panRight);
 
+    /// <summary>The strip stays audible under others' solo in place.</summary>
+    public bool SoloSafe => Volatile.Read(ref soloSafe);
+
     /// <summary>The panner's settings (Phase 10; null: the stereo pan), swapped whole by the control thread.</summary>
     public EnginePanner? Panner => Volatile.Read(ref panner);
 
@@ -77,6 +81,7 @@ public sealed class Strip {
         Volatile.Write(ref dualPan, strip.DualPan);
         Volatile.Write(ref panLeft, float.IsFinite(strip.PanLeft) ? Math.Clamp(strip.PanLeft, -1f, 1f) : -1f);
         Volatile.Write(ref panRight, float.IsFinite(strip.PanRight) ? Math.Clamp(strip.PanRight, -1f, 1f) : 1f);
+        Volatile.Write(ref soloSafe, strip.SoloSafe);
     }
 
     /// <summary>Control thread (Phase 11, an Environment control target): the volume alone.</summary>

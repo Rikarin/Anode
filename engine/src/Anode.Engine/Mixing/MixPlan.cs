@@ -120,6 +120,14 @@ public sealed class MixNode {
     /// <summary>How each send reaches its bus (null where the send goes nowhere).</summary>
     public MixEdge?[] SendEdges { get; init; } = [];
 
+    /// <summary>
+    ///     The stereo down-mix AFL and PFL listen to, output-major: of the channel's signal when it has more than two
+    ///     channels (PFL), of its output edge's channels when they do (AFL). Null otherwise.
+    /// </summary>
+    public float[]? ListenSignal { get; init; }
+
+    public float[]? ListenOutput { get; init; }
+
     /// <summary>The Surround Panner's automation targets: angle, diversity, elevation, centre, LFE, spread (−1: none).</summary>
     public int[] SurroundTargets { get; init; } = [-1, -1, -1, -1, -1, -1];
 
@@ -560,6 +568,8 @@ public sealed class MixPlan {
 
         static readonly MixEdge StereoEdge = new() { Kind = EdgeKind.Stereo };
 
+        static readonly SpeakerLayout StereoLayout = SpeakerLayout.Of(SpeakerFormat.Stereo);
+
         /// <summary>Each aux sits one level above everything feeding its input bus (a loop the server missed is cut).</summary>
         int[] Levels() {
             var n = tracks.Length;
@@ -637,6 +647,8 @@ public sealed class MixPlan {
             var channel = track?.Channel ?? master;
             var spatialParts = SpatialParts(track, trackId, channel, config, output, sends);
             return new() {
+                ListenSignal = spatialParts.SignalWidth > 2 ? Convert(spatialParts.SignalFormat, StereoLayout) : null,
+                ListenOutput = spatialParts.Output is { Width: > 2 } edge ? Convert(edge.Format, StereoLayout) : null,
                 Multi = spatialParts.Multi,
                 Width = spatialParts.Width,
                 Format = spatialParts.Format,

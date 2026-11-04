@@ -1,0 +1,210 @@
+{
+  "schemaVersion": 12,
+  "id": "prj_phase3fixture",
+  "name": "Phase 3 Song",
+  "sampleRate": 48000,
+  "settings": {
+    "tempo": 96,
+    "signature": {
+      "numerator": 4,
+      "denominator": 4
+    },
+    "cycle": {
+      "enabled": true,
+      "startTick": 3840,
+      "endTick": 19200
+    },
+    "metronome": {
+      "enabled": true,
+      "countIn": true,
+      "levelDb": -9
+    },
+    "endTick": 491520,
+    "mergeMidiRecording": false,
+    "tempoEvents": [
+      {
+        "tick": 0,
+        "bpm": 96,
+        "curve": "step",
+        "shape": 0
+      },
+      {
+        "tick": 30720,
+        "bpm": 104,
+        "curve": "ramp",
+        "shape": 0
+      }
+    ],
+    "signatures": [
+      {
+        "tick": 0,
+        "numerator": 4,
+        "denominator": 4
+      }
+    ],
+    "keys": [
+      {
+        "tick": 0,
+        "tonic": 9,
+        "mode": "minor"
+      }
+    ],
+    "recording": {
+      "cycleMode": "takeFolder",
+      "replace": false,
+      "autopunch": true,
+      "punchInTick": 7680,
+      "punchOutTick": 15360
+    },
+    "mixer": {
+      "pdc": "all",
+      "lowLatency": false,
+      "lowLatencyLimitMs": 10,
+      "panLaw": "minus3DbCompensated"
+    },
+    "smartTempo": {
+      "mode": "keep",
+      "defaultFollow": "off",
+      "analyzeImports": true
+    },
+    "varispeed": {
+      "enabled": false,
+      "mode": "speedOnly",
+      "speed": 1
+    },
+    "sync": {
+      "source": "internal",
+      "destinations": [],
+      "frameRate": "fps25",
+      "startOffsetSeconds": 0,
+      "linkStartStop": false
+    },
+    "surroundFormat": "stereo"
+  },
+  "master": {
+    "volumeDb": -1.5,
+    "pan": 0,
+    "mute": false,
+    "solo": false,
+    "inserts": [],
+    "sends": [],
+    "output": "master",
+    "groups": [],
+    "midiEffects": [],
+    "inputFormat": "stereo",
+    "outputFormat": "stereo",
+    "panner": {
+      "mode": "stereo",
+      "surround": {
+        "angle": 0,
+        "diversity": 1,
+        "elevation": 0,
+        "centreLevelDb": 0,
+        "lfeLevelDb": -144,
+        "spread": 60
+      },
+      "object": {
+        "azimuth": 0,
+        "elevation": 0,
+        "distance": 1,
+        "size": 0
+      }
+    },
+    "trimDb": 0,
+    "polarityInverted": false,
+    "delayMs": 0,
+    "dualPan": false,
+    "panLeft": -1,
+    "panRight": 1
+  },
+  "tracks": [
+    "trk_stack0000001",
+    "trk_vocal0000002",
+    "trk_keys00000003"
+  ],
+  "audioFiles": [
+    {
+      "id": "aud_vocal0000001",
+      "name": "Vocal",
+      "path": "Audio Files/Vocal.wav",
+      "sampleRate": 48000,
+      "channels": 1,
+      "frames": 480000,
+      "bitDepth": 24,
+      "version": 0
+    }
+  ],
+  "markers": [
+    {
+      "id": "mrk_verse0000001",
+      "name": "Verse",
+      "tick": 3840,
+      "lengthTicks": 0,
+      "text": "",
+      "kind": "marker"
+    }
+  ],
+  "arrangement": [
+    {
+      "id": "sec_intro0000001",
+      "name": "Intro",
+      "startTick": 0,
+      "lengthTicks": 15360,
+      "color": "#5fa86b"
+    }
+  ],
+  "notes": "Phase 3 fixture",
+  "screensets": [
+    {
+      "number": 1,
+      "name": "Tracks",
+      "locked": false,
+      "layout": "{}"
+    }
+  ],
+  "groups": [],
+  "automation": [],
+  "liveLoops": {
+    "scenes": [],
+    "cells": [],
+    "quantize": "bar",
+    "shown": false
+  },
+  "grooves": [],
+  "articulationSets": [],
+  "laneSets": [],
+  "score": {
+    "staffStyles": [],
+    "symbols": [],
+    "lyrics": [],
+    "chords": [],
+    "sets": [],
+    "layout": {
+      "pageWidthMm": 210,
+      "pageHeightMm": 297,
+      "margins": {
+        "top": 15,
+        "bottom": 15,
+        "left": 15,
+        "right": 15
+      },
+      "staffHeightMm": 7,
+      "title": "",
+      "subtitle": "",
+      "composer": "",
+      "header": "",
+      "footer": "",
+      "transposingScore": false,
+      "instrumentNames": []
+    }
+  },
+  "chordTrack": {
+    "chords": [],
+    "scales": []
+  },
+  "environment": {
+    "layers": [],
+    "objects": [],
+    "cables": []
+  }
+}

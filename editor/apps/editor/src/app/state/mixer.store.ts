@@ -60,7 +60,7 @@ export function withPannerChange(panner: Panner, change: PannerChange): Panner {
 
 /** A change of a strip's input stage: `setStrip`'s fields for its trim, polarity, delay and dual pan. */
 export type StripInputChange = Partial<
-  Pick<ChannelStrip, 'trimDb' | 'polarityInverted' | 'delayMs' | 'dualPan' | 'panLeft' | 'panRight'>
+  Pick<ChannelStrip, 'trimDb' | 'polarityInverted' | 'delayMs' | 'dualPan' | 'panLeft' | 'panRight' | 'soloSafe'>
 >;
 
 const InputLabels: Record<keyof StripInputChange, string> = {
@@ -69,7 +69,8 @@ const InputLabels: Record<keyof StripInputChange, string> = {
   delayMs: 'Track Delay',
   dualPan: 'Dual Pan',
   panLeft: 'Dual Pan',
-  panRight: 'Dual Pan'
+  panRight: 'Dual Pan',
+  soloSafe: 'Solo Safe'
 };
 
 /** A slot being dragged: its chain, its insert, and its strip (null: the master). */

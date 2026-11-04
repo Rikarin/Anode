@@ -119,7 +119,8 @@ public sealed record EngineFile(int Id, string Path, int Channels, int SampleRat
 ///         The strip's input stage: <paramref name="Trim" /> is the signed linear gain on its source before the inserts
 ///         (negative: polarity inverted); <paramref name="DelayFrames" /> moves it in time (negative: earlier, by
 ///         delaying everything else); with <paramref name="DualPan" /> a stereo signal's channels pan on their own to
-///         <paramref name="PanLeft" /> and <paramref name="PanRight" />.
+///         <paramref name="PanLeft" /> and <paramref name="PanRight" />. <paramref name="SoloSafe" /> keeps it audible
+///     under others' solo in place.
 ///     </para>
 /// </summary>
 public sealed record EngineStrip(
@@ -138,8 +139,22 @@ public sealed record EngineStrip(
     int DelayFrames = 0,
     bool DualPan = false,
     float PanLeft = -1f,
-    float PanRight = 1f
+    float PanRight = 1f,
+    bool SoloSafe = false
 );
+
+/// <summary>The contract's <c>SoloMode</c>, in its order.</summary>
+[JsonConverter(typeof(JsonStringEnumConverter<EngineSoloMode>))]
+public enum EngineSoloMode {
+    [JsonStringEnumMemberName("inPlace")]
+    InPlace,
+
+    [JsonStringEnumMemberName("afl")]
+    Afl,
+
+    [JsonStringEnumMemberName("pfl")]
+    Pfl
+}
 
 /// <summary>The contract's <c>PanLaw</c>, in its order.</summary>
 [JsonConverter(typeof(JsonStringEnumConverter<EnginePanLaw>))]
@@ -581,7 +596,8 @@ public sealed record SetMixerMessage(
     string Pdc,
     bool LowLatency,
     double LowLatencyLimitMs,
-    EnginePanLaw PanLaw = EnginePanLaw.Minus3DbCompensated
+    EnginePanLaw PanLaw = EnginePanLaw.Minus3DbCompensated,
+    EngineSoloMode SoloMode = EngineSoloMode.InPlace
 ) : IpcMessage;
 
 /// <summary>
@@ -914,13 +930,17 @@ public sealed record SyncStateMessage(EngineSyncSource Source, bool Locked, doub
 ///     rendered through the HRTF set <paramref name="HrtfPath" /> (Anode's compact file) to outputs 1–2; otherwise
 ///     with <paramref name="DownmixTo" /> they are down-mixed to that format (null: sent as they are). Channel i of what
 ///     is sent goes to 0-based device output <paramref name="SpeakerMap" />[i] (−1: not sent; past the map's end:
-///     output i). The host prepares the renderer off the audio thread and swaps it in.
+///     output i). The host prepares the renderer off the audio thread and swaps it in. <paramref name="Gain" /> and
+///     <paramref name="Mono" /> are the monitor section's (the server works the level out from it): what goes to the
+///     speakers, ramped, the click included; they alone changing costs no new renderer.
 /// </summary>
 public sealed record SetMonitoringMessage(
     bool Binaural,
     EngineChannelFormat? DownmixTo,
     IReadOnlyList<int> SpeakerMap,
-    string? HrtfPath = null
+    string? HrtfPath = null,
+    float Gain = 1f,
+    bool Mono = false
 ) : IpcMessage;
 
 /// <summary>

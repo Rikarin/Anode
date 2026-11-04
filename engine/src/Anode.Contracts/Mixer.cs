@@ -129,12 +129,34 @@ public enum PanLaw {
     Minus6Db
 }
 
+/// <summary>What a strip's solo does.</summary>
+[JsonConverter(typeof(JsonStringEnumConverter<SoloMode>))]
+public enum SoloMode {
+    /// <summary>Solo in place: everything else falls silent, in the mix and in a bounce.</summary>
+    [JsonStringEnumMemberName("inPlace")]
+    InPlace,
+
+    /// <summary>After-fader listen: the mix stays as it is; the monitors hear the soloed strips after fader and pan.</summary>
+    [JsonStringEnumMemberName("afl")]
+    Afl,
+
+    /// <summary>Pre-fader listen: the mix stays as it is; the monitors hear the soloed strips before their faders.</summary>
+    [JsonStringEnumMemberName("pfl")]
+    Pfl
+}
+
 /// <summary>
 ///     Plugin delay compensation, and low-latency mode: while it is on, plugins on the path of record-armed or
 ///     monitored tracks whose latency exceeds <c>lowLatencyLimitMs</c> are bypassed. <c>panLaw</c> is the project's pan
-///     law.
+///     law, <c>soloMode</c> what solo does.
 /// </summary>
-public sealed record MixerSettings(PdcMode Pdc, bool LowLatency, double LowLatencyLimitMs, PanLaw PanLaw);
+public sealed record MixerSettings(
+    PdcMode Pdc,
+    bool LowLatency,
+    double LowLatencyLimitMs,
+    PanLaw PanLaw,
+    SoloMode SoloMode
+);
 
 /// <summary>A user name for an input, output pair or bus (Logic's I/O Labels).</summary>
 public sealed record IoLabel(int Number, string Name);

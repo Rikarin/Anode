@@ -68,6 +68,8 @@ public sealed unsafe class AllocationTests : IDisposable {
         using var controller = new EngineController(new(Rate, 64));
         controller.LoadModel(TestAudio.Load(segment, 1, true, tracks, files, dir));
         controller.Engine.SetMetronome(true, 0.5f);
+        controller.SetMixer("all", false, 10, soloMode: EngineSoloMode.Afl);
+        controller.Engine.SetMonitorSection(0.5f, true);
         using var driver = new OfflineDriver(controller, 64);
         using var take = new RecordTake(2, Path.Combine(dir, "2-take.wav"), 1, Rate);
         controller.Engine.Root.Tracks[2].Take = take;

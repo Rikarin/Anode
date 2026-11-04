@@ -172,11 +172,13 @@ describe('the channel strip in surround', () => {
 describe('monitoring', () => {
   it('works out modes, down-mix targets and the speaker map rows', () => {
     expect(monitoringMode(DefaultMonitoringSettings)).toBe('speakers');
-    expect(monitoringMode({ binaural: false, downmixTo: 'stereo', speakerMap: [] })).toBe('downmix');
+    expect(monitoringMode({ binaural: false, downmixTo: 'stereo', speakerMap: [], section: null })).toBe('downmix');
     expect(downmixTargets('surround51').map(t => t.format)).toEqual(['stereo', 'lcr', 'quad', 'surround50']);
     expect(downmixTargets('stereo')).toEqual([]);
-    expect(sentFormat({ binaural: true, downmixTo: null, speakerMap: [] }, 'surround714')).toBe('stereo');
-    const rows = speakerRows({ binaural: false, downmixTo: null, speakerMap: [3, 4] }, 'surround51');
+    expect(sentFormat({ binaural: true, downmixTo: null, speakerMap: [], section: null }, 'surround714')).toBe(
+      'stereo'
+    );
+    const rows = speakerRows({ binaural: false, downmixTo: null, speakerMap: [3, 4], section: null }, 'surround51');
     expect(rows.map(r => [r.short, r.output])).toEqual([
       ['L', 3],
       ['R', 4],
@@ -186,7 +188,7 @@ describe('monitoring', () => {
       ['Rs', 6]
     ]);
     expect(withSpeakerOutput(rows, 3, 0)).toEqual([3, 4, 3, 0, 5, 6]);
-    expect(speakerRows({ binaural: true, downmixTo: null, speakerMap: [] }, 'surround51')).toEqual([]);
+    expect(speakerRows({ binaural: true, downmixTo: null, speakerMap: [], section: null }, 'surround51')).toEqual([]);
   });
 
   it('loads and saves the user’s monitoring through the Server', async () => {
@@ -198,7 +200,7 @@ describe('monitoring', () => {
     const store = TestBed.inject(MonitoringStore);
     await store.load();
     await store.setMode('downmix');
-    expect(await server.monitoring()).toEqual({ binaural: false, downmixTo: 'stereo', speakerMap: [] });
+    expect(await server.monitoring()).toMatchObject({ binaural: false, downmixTo: 'stereo', speakerMap: [] });
     await store.setSpeakerOutput(1, 0);
     expect((await server.monitoring()).speakerMap).toEqual([1, 0]);
     await store.setMode('binaural');

@@ -509,10 +509,11 @@ public static partial class Edits {
             || c.DelayMs is not null
             || c.DualPan is not null
             || c.PanLeft is not null
-            || c.PanRight is not null;
+            || c.PanRight is not null
+            || c.SoloSafe is not null;
         if (c.TrackId is null) {
             return input
-                ? throw new EditException("The master has no trim, polarity, delay or dual pan.")
+                ? throw new EditException("The master has no trim, polarity, delay, dual pan or solo safe.")
                 : [new MasterChanged(Changed(state.Master, c))];
         }
 
@@ -522,7 +523,7 @@ public static partial class Edits {
 
         var track = TrackOf(state, c.TrackId);
         if (input && !HasAudioStrip(track.Kind)) {
-            throw new EditException($"A {Kind(track.Kind)} track has no trim, polarity, delay or dual pan.");
+            throw new EditException($"A {Kind(track.Kind)} track has no trim, polarity, delay, dual pan or solo safe.");
         }
 
         List<DeltaOp> ops =
@@ -607,7 +608,8 @@ public static partial class Edits {
             DelayMs = c.DelayMs ?? strip.DelayMs,
             DualPan = c.DualPan ?? strip.DualPan,
             PanLeft = c.PanLeft ?? strip.PanLeft,
-            PanRight = c.PanRight ?? strip.PanRight
+            PanRight = c.PanRight ?? strip.PanRight,
+            SoloSafe = c.SoloSafe ?? strip.SoloSafe
         };
 
     static DeltaOp[] AddRegion(ProjectState state, AddRegionCommand c, IIdSource ids) {
