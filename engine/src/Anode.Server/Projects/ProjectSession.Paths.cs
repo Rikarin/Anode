@@ -1,4 +1,3 @@
-
 namespace Anode.Server.Projects;
 
 public sealed partial class ProjectSession {
