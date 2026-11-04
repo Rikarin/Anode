@@ -88,6 +88,7 @@ public sealed partial class ProjectSession(
     ISessionPlayerLibrary players,
     MasteringChains mastering,
     HrtfLocator hrtfs,
+    TemplateLibrary templates,
     TimeProvider time,
     ILogger<ProjectSession> logger
 ) {
@@ -124,6 +125,9 @@ public sealed partial class ProjectSession(
 
     public Project Create(CreateProjectRequest request) {
         var name = CheckProjectName((request.Name ?? string.Empty).Trim());
+        var user = request.Template is { Length: > 0 } id && FactoryTemplates.Find(id) is null
+            ? templates.ProjectFolder(id) ?? throw ProjectException.NotFound($"No template '{id}'.")
+            : null;
         var rate = request.SampleRate ?? device.SampleRate ?? ProjectDefaults.SampleRate;
         if (!ProjectDefaults.SampleRates.Contains(rate)) {
             throw ProjectException.Unprocessable(
@@ -137,7 +141,19 @@ public sealed partial class ProjectSession(
             throw ProjectException.Conflict($"'{folder}' already exists.");
         }
 
+        if (user is not null) {
+            return FromTemplate(name, folder, user, request.SampleRate);
+        }
+
         var state = ProjectDefaults.NewProject(ids.Next(IdPrefix.Project), name, rate);
+        try {
+            if (FactoryTemplates.Find(request.Template ?? string.Empty) is { } factory) {
+                state = FactoryTemplates.Build(factory, state, ids, catalog.ForEdits);
+            }
+        } catch (EditException e) {
+            throw ProjectException.Unprocessable($"Could not make the template: {e.Message}");
+        }
+
         try {
             ProjectPackage.Save(folder, state);
         } catch (Exception e) when (e is IOException or UnauthorizedAccessException) {

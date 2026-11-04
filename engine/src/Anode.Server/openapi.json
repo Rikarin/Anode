@@ -1926,6 +1926,273 @@
         }
       }
     },
+    "/api/v1/library/project-templates": {
+      "get": {
+        "tags": [
+          "Library"
+        ],
+        "summary": "The factory\u0027s project templates, then the user\u0027s: what \u0060template\u0060 in CreateProject names.",
+        "operationId": "ListProjectTemplates",
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/ProjectTemplate"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "Library"
+        ],
+        "summary": "Queues saving the open project, media and unsaved edits included, as a template of the user\u0027s.",
+        "operationId": "SaveProjectTemplate",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SaveTemplateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Job"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found"
+          }
+        }
+      }
+    },
+    "/api/v1/library/project-templates/{id}": {
+      "delete": {
+        "tags": [
+          "Library"
+        ],
+        "operationId": "DeleteProjectTemplate",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "204": {
+            "description": "No Content"
+          },
+          "404": {
+            "description": "Not Found"
+          }
+        }
+      }
+    },
+    "/api/v1/library/track-templates": {
+      "get": {
+        "tags": [
+          "Library"
+        ],
+        "operationId": "ListTrackTemplates",
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/TrackTemplate"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "Library"
+        ],
+        "summary": "Saves tracks as a template with their routing: their stack members, the auxes they reach, their plugins and states. No regions or automation.",
+        "operationId": "SaveTrackTemplate",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SaveTrackTemplateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TrackTemplate"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found"
+          }
+        }
+      }
+    },
+    "/api/v1/library/track-templates/{id}": {
+      "delete": {
+        "tags": [
+          "Library"
+        ],
+        "operationId": "DeleteTrackTemplate",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "204": {
+            "description": "No Content"
+          },
+          "404": {
+            "description": "Not Found"
+          }
+        }
+      }
+    },
+    "/api/v1/library/track-templates/{id}/apply": {
+      "post": {
+        "tags": [
+          "Library"
+        ],
+        "summary": "Queues adding a template\u0027s tracks to the open project, on buses of their own, as one undo step.",
+        "operationId": "ApplyTrackTemplate",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/problem\u002Bjson": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Job"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found"
+          }
+        }
+      }
+    },
     "/api/v1/project/bounce": {
       "post": {
         "tags": [
@@ -7760,8 +8027,15 @@
               "integer"
             ],
             "format": "int32"
+          },
+          "template": {
+            "type": [
+              "null",
+              "string"
+            ]
           }
-        }
+        },
+        "description": "A new project. \u0060template\u0060 names one of \u0060GET /library/project-templates\u0060 (left out: none). Its\n\u0060sampleRate\u0060 is the one asked for, else a template\u0027s own, else the device\u0027s; a template holding audio takes\nonly its own."
       },
       "CycleRange": {
         "required": [
@@ -16507,7 +16781,8 @@
           "saveAs",
           "saveCopy",
           "sampleRateChange",
-          "projectImport"
+          "projectImport",
+          "saveTemplate"
         ]
       },
       "JobState": {
@@ -19720,6 +19995,45 @@
         },
         "description": "A project in the recent list."
       },
+      "ProjectTemplate": {
+        "required": [
+          "id",
+          "name",
+          "category",
+          "description",
+          "factory",
+          "hasAudio"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "category": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          },
+          "factory": {
+            "type": "boolean"
+          },
+          "sampleRate": {
+            "type": [
+              "null",
+              "integer"
+            ],
+            "format": "int32"
+          },
+          "hasAudio": {
+            "type": "boolean"
+          }
+        },
+        "description": "A project template for the chooser. A factory one holds no audio and takes any rate; a user\u0027s has the rate it was\nsaved at (\u0060sampleRate\u0060) and \u0060hasAudio\u0060 says whether it takes only that."
+      },
       "ProjectTempoMode": {
         "enum": [
           "keep",
@@ -20113,6 +20427,48 @@
           }
         },
         "description": "Where Save As or Save a Copy writes the package: a folder on the server\u0027s disk that does not exist yet\n(\u0060.anode\u0060 is added when left out). Its name is the new project\u0027s."
+      },
+      "SaveTemplateRequest": {
+        "required": [
+          "name"
+        ],
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "category": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        }
+      },
+      "SaveTrackTemplateRequest": {
+        "required": [
+          "name",
+          "trackIds"
+        ],
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "category": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "trackIds": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "description": "Saves \u0060trackIds\u0060 as a template, with their stack members and the auxes they reach."
       },
       "ScaleChange": {
         "required": [
@@ -22327,6 +22683,31 @@
           null
         ]
       },
+      "TrackTemplate": {
+        "required": [
+          "id",
+          "name",
+          "category",
+          "tracks"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "category": {
+            "type": "string"
+          },
+          "tracks": {
+            "type": "integer",
+            "format": "int32"
+          }
+        },
+        "description": "A saved set of tracks with their routing (\u0060tracks\u0060 counts those that come with them too)."
+      },
       "TransformCondition": {
         "required": [
           "field",
@@ -22643,10 +23024,10 @@
       "name": "Files"
     },
     {
-      "name": "Jobs"
+      "name": "Library"
     },
     {
-      "name": "Library"
+      "name": "Jobs"
     },
     {
       "name": "Control"

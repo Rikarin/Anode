@@ -102,7 +102,9 @@ public sealed partial class ProjectSession {
         string target,
         IReadOnlyDictionary<string, byte[]?>? hostStates,
         Action<double>? progress,
-        CancellationToken token
+        CancellationToken token,
+        string? name = null,
+        PackageCopyOptions? options = null
     ) {
         long session;
         string folder;
@@ -114,14 +116,14 @@ public sealed partial class ProjectSession {
             states = States(o, hostStates);
         }
 
-        var state = read with { Id = ids.Next(IdPrefix.Project), Name = ProjectCopy.NameOf(target) };
+        var state = read with { Id = ids.Next(IdPrefix.Project), Name = name ?? ProjectCopy.NameOf(target) };
         try {
             ProjectCopy.Write(
                 folder,
                 target,
                 state,
                 states.ToDictionary(static s => s.Key, static s => s.Value.Bytes),
-                null,
+                options,
                 progress,
                 token
             );
@@ -133,10 +135,15 @@ public sealed partial class ProjectSession {
     }
 
     /// <summary>
-    ///     Adds imported tracks, their files already in the project's folder, as one undo step "Import Tracks"; their
+    ///     Adds imported tracks, their files already in the project's folder, as one undo step; their
     ///     plugins bring their states (<paramref name="states" />, by the source's keys). 409 when the project was closed.
     /// </summary>
-    public CommandResult ImportTracks(long session, TrackBundle bundle, IReadOnlyDictionary<string, byte[]> states) {
+    public CommandResult ImportTracks(
+        long session,
+        TrackBundle bundle,
+        IReadOnlyDictionary<string, byte[]> states,
+        string label = "Import Tracks"
+    ) {
         CommandResult result;
         HashSet<string> offline;
         lock (gate) {
@@ -157,7 +164,7 @@ public sealed partial class ProjectSession {
 
             job.Inverse.Reverse();
             result = Commit(o, job.State, job.Forward);
-            o.History.Push("Import Tracks", o.Revision, new(job.Forward, job.Inverse), null);
+            o.History.Push(label, o.Revision, new(job.Forward, job.Inverse), null);
             o.States = o.States.SetItems(ImportedStates(bundle, inserted, states));
             offline = o.Offline.Files.Select(static f => f.FileId).ToHashSet(StringComparer.Ordinal);
             Publish();

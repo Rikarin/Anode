@@ -7,6 +7,17 @@ namespace Anode.Model.Storage;
 /// <param name="History">Whether the backups and alternatives go too (a template has neither).</param>
 public sealed record PackageCopyOptions(bool History = true);
 
+/// <summary>The sidecar that lists a template's package in the library.</summary>
+public sealed record TemplateFile(
+    string Id,
+    string Name,
+    string Category,
+    int SampleRate,
+    int Tracks,
+    bool HasAudio,
+    DateTimeOffset Saved
+);
+
 /// <summary>
 ///     Writes a project as a whole package somewhere else (docs/04-phase-3.md, "Save As and Save a Copy"): every file of
 ///     the package, then the document as it is in memory. It is built in a hidden folder beside the target and renamed
@@ -44,16 +55,31 @@ public static class ProjectCopy {
         CancellationToken token = default
     ) {
         options ??= new();
+        Build(
+            target,
+            build => {
+                CopyTree(source, build, options, progress, token);
+                Rename(build, state);
+                ProjectPackage.Save(build, state);
+                ProjectPackage.SaveStates(build, states);
+                Check(build, state);
+            },
+            token
+        );
+    }
+
+    /// <summary>
+    ///     Makes a package at <paramref name="target" />, which must not exist: <paramref name="fill" /> writes it in a
+    ///     hidden folder beside the target, which takes its place only when <paramref name="fill" /> is done. A failure, or
+    ///     <paramref name="token" />, removes the folder and rethrows.
+    /// </summary>
+    public static void Build(string target, Action<string> fill, CancellationToken token) {
         var parent = Path.GetDirectoryName(Path.GetFullPath(target))!;
         Directory.CreateDirectory(parent);
         var build = Path.Combine(parent, $"{BuildMarker}{Guid.NewGuid():n}");
         try {
             Directory.CreateDirectory(build);
-            CopyTree(source, build, options, progress, token);
-            Rename(build, state);
-            ProjectPackage.Save(build, state);
-            ProjectPackage.SaveStates(build, states);
-            Check(build, state);
+            fill(build);
             token.ThrowIfCancellationRequested();
             Directory.Move(build, target);
             AtomicRename.FlushFolder(parent);

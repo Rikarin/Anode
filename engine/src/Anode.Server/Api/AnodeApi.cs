@@ -15,6 +15,7 @@ public static class AnodeApi {
         PluginsApi.Map(api);
         MidiApi.Map(api);
         LibraryApi.Map(api);
+        TemplatesApi.Map(api);
         MixApi.Map(api);
         FlexApi.Map(api);
         LoopsApi.Map(api);

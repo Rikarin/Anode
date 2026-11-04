@@ -13,3 +13,5 @@ All notable changes to Anode are recorded here, by hand.
 - Import from Project: a browser reads another project without opening it, and chosen tracks join this one as one undo
   step with their regions, inserts, sends and automation, on buses of their own; media is copied, and converted from
   another sample rate.
+- Project and track templates: the chooser offers factory and user templates, a project saves as one with its media, and
+  tracks save with their routing, plugins and states and come back on buses of their own.

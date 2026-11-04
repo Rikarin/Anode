@@ -31,7 +31,7 @@ function busOf(output: string): number | null {
 }
 
 /** The chosen tracks, a stack's members and, with sends, the auxes they reach, in the source's order. */
-function closure(source: Project, ids: readonly string[], sends: boolean): Track[] {
+export function bundledTracks(source: Project, ids: readonly string[], sends: boolean): Track[] {
   const chosen = new Set(ids);
   let grew = true;
   while (grew) {
@@ -68,7 +68,7 @@ export function withImportedTracks(
     sends: request.sends ?? true,
     automation: request.automation ?? true
   };
-  const tracks = closure(source, request.trackIds, parts.sends);
+  const tracks = bundledTracks(source, request.trackIds, parts.sends);
   if (target.tracks.length + tracks.length > MaxTracks) {
     throw new Error(`A project holds at most ${MaxTracks} tracks.`);
   }

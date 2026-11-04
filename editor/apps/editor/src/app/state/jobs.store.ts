@@ -46,7 +46,8 @@ const JobNames: Record<JobKind, string> = {
   saveAs: 'Save As',
   saveCopy: 'Save a Copy',
   sampleRateChange: 'Sample rate change',
-  projectImport: 'Import from project'
+  projectImport: 'Import from project',
+  saveTemplate: 'Save as Template'
 };
 
 /** A file's name from its absolute path. */

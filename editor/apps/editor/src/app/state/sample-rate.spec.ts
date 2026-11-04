@@ -1,5 +1,5 @@
-import type { Project } from '@anode/api-client';
 import { TestBed } from '@angular/core/testing';
+import type { Project } from '@anode/api-client';
 import { ANODE_API } from '../core/api';
 import type { FakeAnodeServer } from '../core/fake/fake-server';
 import { setUpFakeServer, settle } from '../core/fake/testing';

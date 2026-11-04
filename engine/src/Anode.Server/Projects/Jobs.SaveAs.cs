@@ -31,4 +31,27 @@ public sealed partial class Jobs {
             }
         );
     }
+
+    /// <summary>Queues saving the open project as a template of the user's.</summary>
+    public Job SaveProjectTemplate(SaveTemplateRequest? request) {
+        session.Get();
+        ProjectSession.CheckTemplate(request);
+        return Enqueue(
+            JobKind.SaveTemplate,
+            async (entry, token) => {
+                var states = await engine.InstrumentStatesAsync(token).ConfigureAwait(false);
+                var template = await Task.Run(
+                        () => session.SaveProjectTemplate(
+                            request ?? new(string.Empty),
+                            states,
+                            p => Progress(entry, p),
+                            token
+                        ),
+                        token
+                    )
+                    .ConfigureAwait(false);
+                return [template.Id];
+            }
+        );
+    }
 }

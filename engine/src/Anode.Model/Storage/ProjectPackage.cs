@@ -1589,4 +1589,5 @@ static class Schema4 {
 [JsonSerializable(typeof(List<ProjectSummary>))]
 [JsonSerializable(typeof(AlternativesFile))]
 [JsonSerializable(typeof(AutosaveManifest))]
+[JsonSerializable(typeof(TemplateFile))]
 public sealed partial class PackageJsonContext : JsonSerializerContext;

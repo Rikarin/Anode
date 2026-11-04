@@ -47,6 +47,7 @@ import { ChangeSampleRateDialog } from './shell/change-sample-rate';
 import { ImportProjectDialog } from './shell/import-project';
 import { SaveAlternativeDialog } from './shell/save-alternative';
 import { SaveProjectAsDialog } from './shell/save-project-as';
+import { SaveTemplateDialog } from './shell/save-template';
 import { HistoryStore } from './state/history.store';
 import { KeyCommandsStore } from './state/key-commands.store';
 import { LiveMidiStore } from './state/live-midi.store';
@@ -106,6 +107,7 @@ const InterchangeCommands = {
     ImportProjectDialog,
     ChangeSampleRateDialog,
     SaveProjectAsDialog,
+    SaveTemplateDialog,
     ScriptEditor,
     SoundLibraryDialog,
     StemSplitterDialog,
@@ -198,6 +200,11 @@ const InterchangeCommands = {
           @if (ui.saveAlternativeOpen()) {
             @defer (on immediate) {
               <an-save-alternative />
+            }
+          }
+          @if (ui.saveTemplateOpen() !== null) {
+            @defer (on immediate) {
+              <an-save-template />
             }
           }
           @if (ui.importProjectOpen()) {
@@ -462,6 +469,8 @@ export class App {
       'edit.redo': () => void this.history.redo(),
       'project.save': () => void this.session.save(),
       'project.saveAlternative': () => this.ui.saveAlternativeOpen.set(true),
+      'project.saveTemplate': () => this.ui.saveTemplateOpen.set(this.project.isOpen() ? 'project' : null),
+      'project.saveTrackTemplate': () => this.ui.saveTemplateOpen.set(this.project.isOpen() ? 'tracks' : null),
       'project.importTracks': () => this.ui.importProjectOpen.set(this.project.isOpen()),
       'project.saveAs': () => this.saveAs('saveAs'),
       'project.saveCopy': () => this.saveAs('saveCopy'),
@@ -546,6 +555,9 @@ export class App {
         break;
       case 'importProject':
         this.ui.importProjectOpen.set(this.project.isOpen());
+        break;
+      case 'saveTemplate':
+        this.ui.saveTemplateOpen.set(this.project.isOpen() ? 'project' : null);
         break;
       case 'saveProjectAs':
         this.saveAs('saveAs');

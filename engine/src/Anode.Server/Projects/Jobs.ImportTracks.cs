@@ -49,7 +49,23 @@ public sealed partial class Jobs {
             throw ProjectException.Unprocessable("Choose the tracks to import.");
         }
 
-        var (folder, source, states) = ReadProject(request.Path);
+        return ImportFrom(request.Path, chosen, request, "Import Tracks");
+    }
+
+    /// <summary>Queues adding a track template's tracks: 404 for no such template.</summary>
+    public Job ApplyTrackTemplate(string id) {
+        var folder = templates.TrackFolder(id) ?? throw ProjectException.NotFound($"No track template '{id}'.");
+        var (_, source, _) = ReadProject(folder);
+        return ImportFrom(
+            folder,
+            [..source.Tracks.Select(static t => t.Id)],
+            new(folder, [], false, true, true, false),
+            "Add Track Template"
+        );
+    }
+
+    Job ImportFrom(string? path, IReadOnlyList<string> chosen, ImportProjectTracksRequest request, string label) {
+        var (folder, source, states) = ReadProject(path);
         var known = chosen.Where(id => source.FindTrack(id ?? string.Empty) is null).ToArray();
         if (known.Length > 0) {
             throw ProjectException.NotFound($"'{source.Name}' has no track '{known[0]}'.");
@@ -77,7 +93,7 @@ public sealed partial class Jobs {
                 IReadOnlyList<string>() => {
                     var written = new List<string>();
                     try {
-                        ImportTracks(entry, folder, source, chosen, parts, states, target, written, token);
+                        ImportTracks(entry, folder, source, chosen, parts, states, target, written, label, token);
                         return written;
                     } catch {
                         written.ForEach(TryDelete);
@@ -98,6 +114,7 @@ public sealed partial class Jobs {
         Dictionary<string, byte[]> states,
         (long Session, string Folder, int SampleRate) target,
         List<string> written,
+        string label,
         CancellationToken token
     ) {
         var bundle = TrackBundle.Of(source, chosen, parts);
@@ -110,13 +127,13 @@ public sealed partial class Jobs {
             Progress(entry, 0.8 * (index + 1) / bundle.Files.Count);
         }
 
-        var located = LocateMedia(folder, target.Folder, bundle, written);
+        var located = ProjectMedia.Copy(folder, target.Folder, bundle.Tracks, written);
         var rated = ProjectRate.Changed(source, target.SampleRate, SampleRateChangeMode.Convert, files);
         token.ThrowIfCancellationRequested();
         var inserted = TrackBundle.Of(rated, chosen, parts) with {
             Tracks = [..located.Apply(TrackBundle.Of(rated, chosen, parts).Tracks)]
         };
-        session.ImportTracks(target.Session, inserted, states);
+        session.ImportTracks(target.Session, inserted, states, label);
     }
 
     /// <summary>A file of the source as a new file of the project: copied, converted, or (offline) only its entry.</summary>
@@ -180,14 +197,18 @@ public sealed partial class Jobs {
             throw ProjectException.Unprocessable(e.Message);
         }
     }
+}
 
+/// <summary>Where the files instruments and inserts name went: their paths inside the project they joined.</summary>
+sealed record ProjectMedia(Dictionary<string, string> Paths) {
     /// <summary>
-    ///     Copies the files instruments and inserts name inside the source (a sampler's instrument, an impulse response)
-    ///     to the same place in the project; a file of another size already there means a new name.
+    ///     Copies the files <paramref name="tracks" />' instruments and inserts name inside the package at
+    ///     <paramref name="folder" /> (a sampler's instrument, an impulse response) to the same place in
+    ///     <paramref name="target" />; a file of another size already there means a new name.
     /// </summary>
-    static LocatedMedia LocateMedia(string folder, string target, TrackBundle bundle, List<string> written) {
+    public static ProjectMedia Copy(string folder, string target, IEnumerable<Track> tracks, List<string> written) {
         var paths = new Dictionary<string, string>(StringComparer.Ordinal);
-        foreach (var relative in LocatedMedia.Named(bundle.Tracks)) {
+        foreach (var relative in Named(tracks)) {
             var from = Path.GetFullPath(Path.Combine(folder, relative));
             if (Path.IsPathRooted(relative) || !File.Exists(from)) {
                 continue;
@@ -210,12 +231,9 @@ public sealed partial class Jobs {
 
         return new(paths);
     }
-}
 
-/// <summary>Where the files instruments and inserts name went: their paths inside the project they joined.</summary>
-sealed record LocatedMedia(Dictionary<string, string> Paths) {
     /// <summary>Every path the tracks' instruments and inserts name.</summary>
-    public static IEnumerable<string> Named(IEnumerable<Track> tracks) =>
+    static IEnumerable<string> Named(IEnumerable<Track> tracks) =>
         tracks.SelectMany(static t => t.Strip.Inserts.Select(static i => i.File).Prepend(t.Instrument?.File))
             .OfType<string>()
             .Distinct(StringComparer.Ordinal);

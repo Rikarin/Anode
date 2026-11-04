@@ -618,6 +618,7 @@ function buildMenu(): void {
     command('Save', 'saveProject', 'CmdOrCtrl+S'),
     command('Save As…', 'saveProjectAs', 'CmdOrCtrl+Shift+S'),
     command('Save a Copy…', 'saveProjectCopy'),
+    command('Save as Template…', 'saveTemplate'),
     command('Close Project', 'closeProject', 'CmdOrCtrl+Shift+W'),
     { type: 'separator' },
     command('Import Audio…', 'importAudio', 'CmdOrCtrl+Shift+I'),

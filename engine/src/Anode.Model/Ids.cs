@@ -34,6 +34,7 @@ public sealed class SequentialIds : IIdSource {
 
 public static class IdPrefix {
     public const string Project = "prj";
+    public const string Template = "tpl";
     public const string Track = "trk";
     public const string Region = "rgn";
     public const string File = "aud";

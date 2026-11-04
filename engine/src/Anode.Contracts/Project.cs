@@ -284,7 +284,12 @@ public sealed record AudioFile(
     int Version
 );
 
-public sealed record CreateProjectRequest(string Name, string? Directory, int? SampleRate);
+/// <summary>
+///     A new project. <c>template</c> names one of <c>GET /library/project-templates</c> (left out: none). Its
+///     <c>sampleRate</c> is the one asked for, else a template's own, else the device's; a template holding audio takes
+///     only its own.
+/// </summary>
+public sealed record CreateProjectRequest(string Name, string? Directory, int? SampleRate, string? Template = null);
 
 public sealed record OpenProjectRequest(string Path);
 

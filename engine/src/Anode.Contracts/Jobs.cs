@@ -119,7 +119,11 @@ public enum JobKind {
 
     /// <summary>Import from Project (<c>ImportProjectTracksRequest</c>): chosen tracks of another package, one undo step.</summary>
     [JsonStringEnumMemberName("projectImport")]
-    ProjectImport
+    ProjectImport,
+
+    /// <summary>Saving the open project as a template of the user's (<c>SaveTemplateRequest</c>).</summary>
+    [JsonStringEnumMemberName("saveTemplate")]
+    SaveTemplate
 }
 
 [JsonConverter(typeof(JsonStringEnumConverter<JobState>))]
