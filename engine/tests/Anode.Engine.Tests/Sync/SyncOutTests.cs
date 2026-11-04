@@ -318,7 +318,8 @@ public sealed unsafe class SyncOutTests : IDisposable {
         );
         rig.Driver.Send(new(EngineCommandKind.Play));
         rig.Run(4);
-        // The rig's clock is its own; the hub sends what is due on the machine's, which may have been up for only minutes.
+        // The rig's clock is its own; the hub sends what is due on the machine's, which may have been up for only
+        // minutes.
         var events = rig.Out.Select(e => e with { TimeNs = e.TimeNs - rig.Out[0].TimeNs + 1_000_000_000 }).ToList();
         foreach (var e in events) {
             Assert.True(rig.Controller.Engine.SyncOut.TryEnqueue(e)); // hand them to the MIDI thread
