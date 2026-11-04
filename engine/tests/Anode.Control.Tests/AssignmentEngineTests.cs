@@ -235,6 +235,26 @@ public sealed class AssignmentEngineTests {
     }
 
     [Fact]
+    public void Pickup_keeps_the_target_while_values_sent_have_not_reached_it() {
+        var engine = Engine(Assignment("a", ControlInputKind.ControlChange, 21, Volume, pickup: true));
+        var values = new Values { Current = { [Volume] = 0.5 } };
+        Assert.Empty(engine.Receive(Port, Cc(21, 40), values));
+
+        // Nothing sent has landed yet, then the first value does, then the control turns back.
+        Assert.Equal(110 / 127.0, Single(engine.Receive(Port, Cc(21, 110), values)), 12);
+        Assert.Equal(112 / 127.0, Single(engine.Receive(Port, Cc(21, 112), values)), 12);
+        values.Current[Volume] = 110 / 127.0;
+        Assert.Equal(114 / 127.0, Single(engine.Receive(Port, Cc(21, 114), values)), 12);
+        Assert.Equal(100 / 127.0, Single(engine.Receive(Port, Cc(21, 100), values)), 12);
+
+        // Once it has caught up, a target off that way has moved elsewhere.
+        values.Current[Volume] = 100 / 127.0;
+        Assert.Equal(101 / 127.0, Single(engine.Receive(Port, Cc(21, 101), values)), 12);
+        values.Current[Volume] = 0.1;
+        Assert.Empty(engine.Receive(Port, Cc(21, 102), values));
+    }
+
+    [Fact]
     public void Pickup_takes_a_value_that_lands_on_the_target() {
         var engine = Engine(Assignment("a", ControlInputKind.ControlChange, 21, Volume, pickup: true));
         var values = new Values { Current = { [Volume] = 64 / 127.0 } };

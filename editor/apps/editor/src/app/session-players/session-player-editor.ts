@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component, computed, effect, inject, linkedSignal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, computed, inject, linkedSignal } from '@angular/core';
 import type {
   BassSwitches,
   DrummerSwitches,
@@ -422,15 +422,17 @@ export class SessionPlayerEditor {
   protected readonly styleName = computed(() => this.style()?.name ?? '');
   protected readonly presets = computed(() => this.style()?.presets ?? []);
   protected readonly rhythms = computed(() => this.style()?.rhythms ?? []);
-  /** The XY pad while it is dragged, else the region's. */
+  private readonly regionId = computed(() => this.region()?.id ?? null);
+  /** The XY pad while it is dragged or its edits are out, else the region's. Each new region starts without one. */
   protected readonly draft = linkedSignal<string | null, SessionPadValue | null>({
-    source: () => this.region()?.id ?? null,
+    source: this.regionId,
     computation: () => null
   });
   protected readonly pad = computed(
     () => this.draft() ?? this.region()?.parameters.pad ?? { complexity: 0.5, intensity: 0.5 }
   );
   private padSent: SessionPadValue | null = null;
+  private padPending = 0;
   /** The track's other regions on the pad. */
   protected readonly others = computed<SessionPadMarker[]>(() => {
     const region = this.region();
@@ -452,14 +454,6 @@ export class SessionPlayerEditor {
 
   constructor() {
     void this.players.loadCatalog();
-    effect(() => {
-      const draft = this.draft();
-      const pad = this.region()?.parameters.pad;
-      if (draft && draft.complexity === pad?.complexity && draft.intensity === pad.intensity) {
-        this.padSent = null;
-        this.draft.set(null);
-      }
-    });
   }
 
   protected set(changes: Parameters<SessionPlayersStore['set']>[1], label: string): Promise<unknown> {
@@ -472,17 +466,18 @@ export class SessionPlayerEditor {
     const current = this.padSent ?? this.region()?.parameters.pad;
     if (current && (current.complexity !== value.complexity || current.intensity !== value.intensity)) {
       this.padSent = value;
-      // The region's answer redraws the puck (the constructor's effect clears the draft); until then the value stays,
-      // so a key held down keeps stepping from it. A refused edit goes back to the region's.
-      void this.set({ complexity: value.complexity, intensity: value.intensity }, 'Complexity and Intensity').then(
-        result => {
-          if (result === null && this.draft() === value) {
+      this.padPending++;
+      // The draft stays until the last answer, so a key held down keeps stepping from it. A region that matches it
+      // says nothing while edits are out: a step back to where the region was, whose answers are still on their way.
+      void this.set({ complexity: value.complexity, intensity: value.intensity }, 'Complexity and Intensity').finally(
+        () => {
+          if (--this.padPending === 0) {
             this.padSent = null;
             this.draft.set(null);
           }
         }
       );
-    } else {
+    } else if (this.padPending === 0) {
       queueMicrotask(() => this.draft.set(null));
     }
   }

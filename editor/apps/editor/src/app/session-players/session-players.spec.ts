@@ -72,6 +72,46 @@ describe('Session Players in the editor', () => {
     expect(players.notes().has(region.id)).toBe(false);
   });
 
+  it('keeps stepping the pad from the draft while answers to a step back to the region are on their way', async () => {
+    const { server, project } = await song();
+    await project.execute([{ type: 'addSessionPlayerTrack', player: 'drummer', regions: true }], 'New Drummer');
+    await settle();
+    const players = TestBed.inject(SessionPlayersStore);
+    const region = must(players.regions()[0]);
+    TestBed.inject(SelectionStore).select([region.id]);
+    const fixture = TestBed.createComponent(SessionPlayerEditor);
+    fixture.autoDetectChanges();
+    await stable(fixture);
+    const pad = must(
+      (fixture.nativeElement as HTMLElement).querySelector<HTMLElement>(
+        '[role="slider"][aria-roledescription="XY pad"]'
+      )
+    );
+    const press = (key: string) => pad.dispatchEvent(new KeyboardEvent('keydown', { key, bubbles: true }));
+
+    // Each answer held back until released: the second press lands on the region's own value.
+    const held: (() => void)[] = [];
+    const execute = project.execute.bind(project);
+    vi.spyOn(project, 'execute').mockImplementation(async (...args) => {
+      await new Promise<void>(release => held.push(release));
+      return execute(...args);
+    });
+    press('ArrowLeft');
+    press('ArrowRight');
+    await stable(fixture);
+    must(held.shift())();
+    await stable(fixture);
+    press('ArrowRight');
+    await stable(fixture);
+    while (held.length > 0) {
+      must(held.shift())();
+      await stable(fixture);
+    }
+    expect(must(must(server.current).sessionPlayerRegions[0]).parameters.pad.complexity).toBeCloseTo(
+      region.parameters.pad.complexity + 0.05
+    );
+  });
+
   it('brings the Session Player Editor for a region: the pad, a preset, the switches, Regenerate and Convert', async () => {
     const { server, project } = await song();
     await project.execute([{ type: 'addSessionPlayerTrack', player: 'drummer', regions: true }], 'New Drummer');
